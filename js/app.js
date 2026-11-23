@@ -217,7 +217,7 @@
           <label class="sr-only" for="sampleSel">Load a sample</label>
           <select id="sampleSel" style="width:auto;padding-top:6px;padding-bottom:6px;font-size:13px"><option value="">Load a sample…</option>${SAMPLES.map((s) => `<option value="${s.id}">${esc(s.title)}</option>`).join('')}</select></div>
         <p class="sub">One speaker per line, e.g. <code>Interviewer: …</code> then <code>Maya: …</code>. Use synthetic or anonymised data.</p>
-        ${S.interviews.length ? '<ul class="ilist" style="padding:0;margin-top:0">' + S.interviews.map((t, i) => { const iv = GT.makeInterview('i' + (i + 1), t); const ok = iv.turns.some((x) => x.role === 'interviewee'); return `<li class="item"><span class="av" aria-hidden="true">${esc(iv.name.slice(0, 1).toUpperCase())}</span><span class="meta"><b>${esc(iv.name)}</b><small>Interview ${i + 1} · ${iv.words} words · ${iv.turns.length} turns${ok ? '' : ' · <span class="warn">no interviewee lines found</span>'}</small></span><button class="btn sm ghost" data-action="rmiv" data-i="${i}" aria-label="Remove interview with ${esc(iv.name)}">Remove</button></li>`; }).join('') + '</ul>' : ''}
+        ${S.interviews.length ? '<ul class="ilist" style="padding:0;margin-top:0">' + S.interviews.map((t, i) => { const iv = GT.makeInterview('i' + (i + 1), t); const ok = iv.turns.some((x) => x.role === 'interviewee'); return `<li class="item iv"><details data-key="iv${i}" ${S.open['iv' + i] ? 'open' : ''}><summary><span class="av" aria-hidden="true">${esc(iv.name.slice(0, 1).toUpperCase())}</span><span class="meta"><b>${esc(iv.name)}</b><small>Interview ${i + 1} · ${iv.words} words · ${iv.turns.length} turns${ok ? '' : ' · <span class="warn">no interviewee lines found</span>'}<span class="show"> · read or edit</span></small></span></summary><label class="sr-only" for="iv-${i}">Transcript of interview ${i + 1}</label><textarea id="iv-${i}" data-iv="${i}" spellcheck="false">${esc(t)}</textarea></details><button class="btn sm ghost" data-action="rmiv" data-i="${i}" aria-label="Remove interview with ${esc(iv.name)}">Remove</button></li>`; }).join('') + '</ul>' : ''}
         <label class="f" for="newIv">${S.interviews.length ? 'Add another interview' : 'Paste an interview'}</label>
         <textarea id="newIv" placeholder="Interviewer: Tell me about the last time…&#10;Maya: Last month actually…" aria-describedby="ivCount"></textarea>
         <div class="row wrap" style="margin-top:10px"><button class="btn sm" data-action="addiv">Add interview</button>
@@ -249,11 +249,15 @@
           ` : '<p class="hint" style="margin-top:12px">Sandbox replays model outputs scripted by the team for the two built-in samples, so you can try the full flow with no key. Verification, scoring and the checkpoint run the real code.</p>'}
         </section>
         ${sandboxBlocked() ? '<div class="notice amber" role="note">These are your own interviews. Sandbox only knows the built-in samples, so switch to <b>Live model</b> to analyse them (free).</div>' : ''}
-        <div class="row sp wrap">
-          <span class="hint" style="margin:0">${!S.interviews.length ? 'Add at least one interview, or <button class="linkbtn" data-action="loadsample">load the sample now</button>.' : !S.assumptions.length ? 'Add at least one assumption.' : S.interviews.length < 5 ? '<span class="warn">Fewer than 5 interviews gives weak verdicts. The app will say so.</span>' : 'Ready when you are.'}</span>
-          <button class="btn primary" data-action="togut" ${setupValid() && !sandboxBlocked() ? '' : 'disabled'}>Continue</button>
-        </div>
       </div>
+    </div>    <div class="setupbar" role="region" aria-label="Setup progress">
+      <ul class="checks">
+        <li class="${S.interviews.length ? 'ok' : ''}"><i aria-hidden="true">${S.interviews.length ? '✓' : '1'}</i>Interviews</li>
+        <li class="${S.assumptions.some((a) => a.text.trim()) ? 'ok' : ''}"><i aria-hidden="true">${S.assumptions.some((a) => a.text.trim()) ? '✓' : '2'}</i>Assumptions</li>
+        <li class="${!needsKeyMissing() && !sandboxBlocked() ? 'ok' : ''}"><i aria-hidden="true">${!needsKeyMissing() && !sandboxBlocked() ? '✓' : '3'}</i>Model</li>
+      </ul>
+      <span class="hint grow" style="margin:0">${!S.interviews.length ? 'Add an interview, or <button class="linkbtn" data-action="loadsample">load the sample now</button>.' : !S.assumptions.length ? 'Add at least one assumption.' : needsKeyMissing() ? 'Paste your free API key, or switch to Sandbox.' : S.interviews.length < 5 ? '<span class="warn">Fewer than 5 interviews gives weak verdicts. The app will say so.</span>' : 'Ready when you are.'}</span>
+      <button class="btn primary" data-action="togut" ${setupValid() && !sandboxBlocked() ? '' : 'disabled'}>Continue</button>
     </div>`;
   }
 
@@ -644,6 +648,7 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
     if (el.id === 'sampleSel') { if (el.value) { loadSample(el.value); render(); toast('Sample loaded: ' + SAMPLES.find((x) => x.id === el.value).title + '.'); } return; }
     if (el.dataset.action === 'act') { const d = draftOf(el.dataset.id); d.action = el.dataset.v; if (d.action !== 'override') d.verdict = ''; render(); return; }
     if (el.dataset.action === 'approve') { S.memoApproved = el.checked; render(); if (el.checked) announce('Exports unlocked.'); return; }
+    if (el.dataset.iv != null) { render(); return; }
     if (el.id === 'modelSel') { if (el.value === '__other') { S.cfg.modelOther = S.cfg.preset; S.cfg.model = ''; } else { S.cfg.modelOther = false; S.cfg.model = el.value; } provider = null; render(); return; }
     if (el.dataset.bind === 'cfg.preset') { S.cfg.preset = el.value; S.cfg.model = ''; S.cfg.modelOther = false; S.cfg.baseUrl = ''; provider = null; render(); return; }
     if (el.dataset.draft) draftOf(el.dataset.id)[el.dataset.draft] = el.value;
@@ -651,6 +656,7 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
 
   document.addEventListener('input', (ev) => {
     const el = ev.target;
+    if (el.dataset.iv != null) { if (S.run) { invalidate(); renderChrome(); } S.interviews[+el.dataset.iv] = el.value; const b = $('[data-action=togut]'); if (b) b.disabled = !setupValid() || sandboxBlocked(); save(); return; }
     if (el.dataset.bindA != null) {
       if (S.run) { invalidate(); renderChrome(); }
       S.assumptions[+el.dataset.bindA].text = el.value;
