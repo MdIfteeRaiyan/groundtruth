@@ -153,7 +153,7 @@ async def main():
         # ===== 3. Live path through fault-injecting mock =====
         ctx = await b.new_context(viewport={'width':1280,'height':860}); pg = await ctx.new_page(); hook(pg)
         await pg.goto(URL); await pg.select_option('#sampleSel','nudgepay')
-        await pg.click('[data-action=mode][data-v=live]'); await pg.select_option('#preset','openrouter'); await pg.fill('#model','openai/gpt-4o'); await pg.fill('#key','x')
+        await pg.click('[data-action=mode][data-v=live]'); await pg.select_option('#preset','openrouter'); await pg.select_option('#modelSel','__other'); await pg.fill('#model','openai/gpt-4o'); await pg.fill('#key','x')
         await pg.click('[data-action=togut]'); ok('paid model blocked', await pg.locator('.gut').count()==0)
         await pg.select_option('#preset','custom'); await pg.fill('#model','mock'); await pg.fill('#base','http://127.0.0.1:8787/v1')
         await pg.click('[data-action=test]'); await pg.wait_for_selector('#testOut .ok', timeout=15000)

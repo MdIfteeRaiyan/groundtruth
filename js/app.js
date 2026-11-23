@@ -118,10 +118,10 @@
       '<button class="iconbtn" data-action="dlg" data-k="guide" aria-label="How to use Groundtruth" title="How to use">' + ICON.help + '</button>' +
       '<button class="iconbtn" data-action="theme" aria-label="Switch to ' + (dark ? 'light' : 'dark') + ' theme" title="Switch to ' + (dark ? 'light' : 'dark') + ' theme">' + (dark ? ICON.sun : ICON.moon) + '</button>';
     $('#stepper').innerHTML = STEPS.map((name, i) => {
-      const n = i + 1, now = n === S.step, can = !now && available(n), done = n < S.step || (!now && (n < 5 ? available(n + 1) : S.memoApproved));
-      const cls = ['step', done && !now ? 'done' : '', now ? 'now' : '', can ? 'go' : '', n === 4 ? 'gate' : ''].join(' ');
-      const label = name + (now ? ', current step' : done ? ', completed' : can ? '' : ', not available yet');
-      return '<button class="' + cls + '" ' + (can ? 'data-action="goto" data-n="' + n + '"' : 'aria-disabled="true"') + (now ? ' aria-current="step"' : '') + ' aria-label="Step ' + n + ': ' + label + '"><b aria-hidden="true">' + (done && !now ? '✓' : n) + '</b><span aria-hidden="true">' + name + '</span></button>';
+      const n = i + 1, now = n === S.step, can = !now && available(n), locked = !now && !can, done = n < S.step || (!now && (n < 5 ? available(n + 1) : S.memoApproved));
+      const cls = ['step', done && !now ? 'done' : '', now ? 'now' : '', can ? 'go' : '', locked ? 'lock' : '', n === 4 ? 'gate' : ''].join(' ');
+      const label = name + (now ? ', current step' : done ? ', completed' : can ? '' : ', locked, select to see what is needed');
+      return '<button class="' + cls + '" ' + (now ? '' : 'data-action="goto" data-n="' + n + '"') + (locked ? ' aria-disabled="true"' : '') + (now ? ' aria-current="step"' : '') + ' aria-label="Step ' + n + ': ' + label + '"><b aria-hidden="true">' + (done && !now ? '✓' : n) + '</b><span aria-hidden="true">' + name + '</span></button>';
     }).join('');
     const pb = $('#progBar'); if (pb) pb.style.width = (S.step / STEPS.length * 100) + '%';
     $('#repoLink').innerHTML = REPO_URL ? '<a class="linkbtn" href="' + esc(REPO_URL) + '" target="_blank" rel="noopener">Source code</a>' : '';
@@ -141,6 +141,19 @@
     S.step = n; enterNext = true; render(); window.scrollTo({ top: 0 });
     const h = $('#app h1'); if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
     document.title = STEPS[n - 1] + ' · Groundtruth';
+  }
+
+  function modelFieldHtml(pr) {
+    const list = pr.models || [], cur = S.cfg.model || '';
+    const other = !list.length || S.cfg.modelOther || (cur && !list.includes(cur));
+    const sel = list.length ? `<label class="f" for="modelSel">Model</label><select id="modelSel">${list.map((m) => `<option value="${esc(m)}" ${!other && (cur === m || (!cur && m === list[0])) ? 'selected' : ''}>${esc(m)}${m === list[0] ? ' (recommended)' : ''}</option>`).join('')}<option value="__other" ${other ? 'selected' : ''}>Other…</option></select>` : '';
+    const txt = other ? `<label class="f" for="model">${list.length ? 'Model name' : 'Model'}</label><input type="text" id="model" data-bind="cfg.model" value="${esc(cur)}" placeholder="${esc(pr.model || 'model name')}" autocomplete="off" spellcheck="false">` : '';
+    return sel + txt;
+  }
+  function lockReason(n) {
+    if (n === 2) return !S.interviews.length ? 'Add an interview first, or load a sample.' : 'Fill in at least one assumption first.';
+    if (n === 5) return S.run && S.run.done ? 'Decide every assumption at the checkpoint first (accept, override or park).' : 'Run the agent and decide each assumption first.';
+    return setupValid() ? 'Press “Run the agent” on the gut-check step first.' : 'Finish Setup first.';
   }
 
   /* ---------- key sanity hints ---------- */
@@ -179,6 +192,13 @@
         <p>Paste your customer interviews and the assumptions your startup depends on. Groundtruth verifies every quote, scores each assumption with transparent rules, attacks its own verdicts, and stops until you make the call.</p>
         <div class="cta"><button class="btn primary lg" data-action="quick" data-id="nudgepay">Try the sample, no key needed</button><button class="btn lg" data-action="dlg" data-k="guide">How it works</button></div>
         <p class="cta-note">Two synthetic samples included: freelance invoicing, or <button data-action="quick" data-id="shiftfill">restaurant shift gaps</button>.</p>
+        <div class="peek" aria-hidden="true">
+          <div class="peek-bar"><i></i><i></i><i></i><span>Checkpoint · what the evidence says</span></div>
+          <div class="peek-row"><span class="pid">A1</span><span class="pt">Freelancers are paid late regularly (at least once a month).</span><span class="badge supported">Supported</span><span class="badge robust">Robust</span></div>
+          <div class="peek-row"><span class="pid">A3</span><span class="pt">Freelancers will trust software to send payment reminders in their own name.</span><span class="badge contradicted">Contradicted</span><span class="badge fragile">Fragile</span></div>
+          <div class="peek-row"><span class="pid">A2</span><span class="pt">Chasing late payments is time-consuming enough to automate.</span><span class="badge mixed">Mixed</span><span class="badge">Awaiting you</span></div>
+          <div class="peek-foot"><b>✓ 11 quotes verified word for word</b><span>1 invented quote rejected</span></div>
+        </div>
       </section>
       <ol class="flow" aria-label="The five steps">
         <li><b>Setup</b>Paste interviews, list assumptions</li>
@@ -220,7 +240,7 @@
           ${live ? `
             <label class="f" for="preset">Provider</label>
             <select id="preset" data-bind="cfg.preset">${Object.keys(P).map((k) => `<option value="${k}" ${k === S.cfg.preset ? 'selected' : ''}>${esc(P[k].label)}</option>`).join('')}</select>
-            <label class="f" for="model">Model</label><input type="text" id="model" data-bind="cfg.model" value="${esc(S.cfg.model)}" placeholder="${esc(pr.model || 'model name')}" autocomplete="off" spellcheck="false">
+            ${modelFieldHtml(pr)}
             ${S.cfg.preset === 'custom' || S.cfg.preset === 'ollama' ? `<label class="f" for="base">Base URL</label><input type="url" id="base" data-bind="cfg.baseUrl" value="${esc(S.cfg.baseUrl)}" placeholder="${esc(pr.baseUrl || 'https://…/v1')}" autocomplete="off" spellcheck="false">` : ''}
             ${pr.needsKey ? `<label class="f" for="key">Free API key</label><input type="password" id="key" data-bind="cfg.key" value="${esc(S.cfg.key)}" autocomplete="off" spellcheck="false" placeholder="Paste key" aria-describedby="keyHelp keyWarn"><div id="keyWarn" role="status">${keyWarnHtml()}</div>${pr.keyHelp ? `<p class="hint" id="keyHelp">Get one free at <a href="${esc(pr.keyHelp)}" target="_blank" rel="noopener">${esc(pr.keyHelp.replace('https://', ''))}</a>. Never saved.</p>` : ''}` : ''}
             ${S.cfg.preset === 'ollama' ? '<p class="hint">Start Ollama with <code>OLLAMA_ORIGINS=*</code> so the page may call it. Nothing leaves your machine.</p>' : ''}
@@ -575,7 +595,7 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
       case 'goto': {
         const n = +el.dataset.n;
         if (n === 2 && S.step === 1 && S.cfg.mode === 'live') { const g = LLM.freeGuard(S.cfg); if (!g.ok) { toast(g.msg); break; } }
-        if (available(n)) go(n); break;
+        if (available(n)) go(n); else toast(lockReason(n)); break;
       }
       case 'mode': S.cfg.mode = el.dataset.v; provider = null; render(); break;
       case 'upload': $('#file').click(); break;
@@ -612,7 +632,8 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
     if (el.id === 'sampleSel') { if (el.value) { loadSample(el.value); render(); toast('Sample loaded: ' + SAMPLES.find((x) => x.id === el.value).title + '.'); } return; }
     if (el.dataset.action === 'act') { const d = draftOf(el.dataset.id); d.action = el.dataset.v; if (d.action !== 'override') d.verdict = ''; render(); return; }
     if (el.dataset.action === 'approve') { S.memoApproved = el.checked; render(); if (el.checked) announce('Exports unlocked.'); return; }
-    if (el.dataset.bind === 'cfg.preset') { S.cfg.preset = el.value; S.cfg.model = ''; S.cfg.baseUrl = ''; provider = null; render(); return; }
+    if (el.id === 'modelSel') { if (el.value === '__other') { S.cfg.modelOther = true; S.cfg.model = ''; } else { S.cfg.modelOther = false; S.cfg.model = el.value; } provider = null; render(); return; }
+    if (el.dataset.bind === 'cfg.preset') { S.cfg.preset = el.value; S.cfg.model = ''; S.cfg.modelOther = false; S.cfg.baseUrl = ''; provider = null; render(); return; }
     if (el.dataset.draft) draftOf(el.dataset.id)[el.dataset.draft] = el.value;
   });
 

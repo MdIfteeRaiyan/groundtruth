@@ -2,10 +2,10 @@
    never leaves the user's machine except in the Authorization header sent to the provider they chose. */
 (function (root) {
   const PRESETS = {
-    gemini: { label: 'Google Gemini (free tier)', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash', needsKey: true, gapMs: 1500, keyHelp: 'https://aistudio.google.com/apikey' },
-    groq: { label: 'Groq (free tier, open-weight Llama)', baseUrl: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile', needsKey: true, gapMs: 2500, keyHelp: 'https://console.groq.com/keys' },
-    openrouter: { label: 'OpenRouter (":free" models only)', baseUrl: 'https://openrouter.ai/api/v1', model: 'meta-llama/llama-3.3-70b-instruct:free', needsKey: true, gapMs: 3000, keyHelp: 'https://openrouter.ai/keys' },
-    ollama: { label: 'Ollama (local, open-weight)', baseUrl: 'http://localhost:11434/v1', model: 'llama3.1:8b', needsKey: false, gapMs: 0, keyHelp: 'https://ollama.com' },
+    gemini: { label: 'Google Gemini (free tier)', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash', models: ['gemini-2.5-flash', 'gemini-2.5-flash-lite'], needsKey: true, gapMs: 1500, keyHelp: 'https://aistudio.google.com/apikey' },
+    groq: { label: 'Groq (free tier, open-weight Llama)', baseUrl: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile', models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b'], needsKey: true, gapMs: 2500, keyHelp: 'https://console.groq.com/keys' },
+    openrouter: { label: 'OpenRouter (":free" models only)', baseUrl: 'https://openrouter.ai/api/v1', model: 'meta-llama/llama-3.3-70b-instruct:free', models: ['meta-llama/llama-3.3-70b-instruct:free', 'openai/gpt-oss-20b:free'], needsKey: true, gapMs: 3000, keyHelp: 'https://openrouter.ai/keys' },
+    ollama: { label: 'Ollama (local, open-weight)', baseUrl: 'http://localhost:11434/v1', model: 'llama3.1:8b', models: ['llama3.1:8b', 'llama3.2:3b', 'qwen2.5:7b'], needsKey: false, gapMs: 0, keyHelp: 'https://ollama.com' },
     custom: { label: 'Custom OpenAI-compatible endpoint', baseUrl: '', model: '', needsKey: false, gapMs: 1000, keyHelp: '' },
   };
 
@@ -46,6 +46,7 @@
             return { text, usage: data.usage || {} };
           }
           const detail = (await res.text().catch(() => '')).slice(0, 300);
+          if (res.status === 404 && /model/i.test(detail)) throw Object.assign(new Error('The model “' + (cfg.model || preset.model) + '” was not found. Check the spelling or pick one from the Model list.'), { fatal: true });
           if (res.status === 400 && json && jsonModeOk && /response_format|json/i.test(detail)) { jsonModeOk = false; continue; }
           if (res.status === 401 || res.status === 403) throw Object.assign(new Error('The provider rejected the API key (HTTP ' + res.status + ').'), { fatal: true });
           if ((res.status === 429 || res.status >= 500) && attempt < 5) {
