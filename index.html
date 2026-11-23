@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Groundtruth · Audit your customer interviews before you bet on them</title>
+<meta name="description" content="An AI agent that turns founder customer interviews into verified evidence, sceptical verdicts and a decision memo, with a human checkpoint you cannot skip. Free-tier and open-weight models only.">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#FFFFFF">
+<meta property="og:title" content="Groundtruth: audit your customer interviews">
+<meta property="og:description" content="Verified quotes, rule-based verdicts, a red team, and a human checkpoint before any decision.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230F172A'/%3E%3Cpath d='M9 16.5l4.5 4.5L23 11' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<script src="js/theme.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Inter:wght@400..700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<a class="skip" href="#app">Skip to main content</a>
+<header class="top wrapw">
+  <a class="brand" href="#" data-action="home" aria-label="Groundtruth, home">
+    <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="17" height="17"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    <span class="brand-txt"><strong>Groundtruth</strong><span class="tagline">customer-discovery auditor</span></span>
+  </a>
+  <div class="tools" id="tools"></div>
+</header>
+<div class="wrapw"><nav class="stepper" id="stepper" aria-label="Progress"></nav></div>
+<main id="app" class="wrapw" tabindex="-1"></main>
+<footer class="foot wrapw">
+  <span>Free-tier and open-weight models only · API keys are never stored · sample data is synthetic</span>
+  <nav aria-label="Information">
+    <button class="linkbtn" data-action="dlg" data-k="guide">How to use</button>
+    <button class="linkbtn" data-action="dlg" data-k="method">Method</button>
+    <button class="linkbtn" data-action="dlg" data-k="privacy">Privacy &amp; AI policy</button>
+    <span id="repoLink"></span>
+  </nav>
+</footer>
+<dialog id="dlg" aria-labelledby="dlgTitle"></dialog>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="sr" class="sr-only" aria-live="polite"></div>
+<div id="printArea"></div>
+<noscript><p style="padding:24px;text-align:center">Groundtruth needs JavaScript to run. Everything runs in your browser; nothing is sent anywhere except to the model provider you choose.</p></noscript>
+<script src="js/core.js"></script>
+<script src="js/data.js"></script>
+<script src="js/sandbox.js"></script>
+<script src="js/llm.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

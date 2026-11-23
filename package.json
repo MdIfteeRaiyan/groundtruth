@@ -1,0 +1,13 @@
+{
+  "name": "groundtruth",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI agent that audits founder customer interviews, with a mandatory human checkpoint. Free-tier / open-weight models only.",
+  "license": "MIT",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "test": "node tests/run.js",
+    "mock": "FAULTS=1 node tools/mock-openai-server.js"
+  },
+  "engines": { "node": ">=18" }
+}
