@@ -576,7 +576,7 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
     try {
       const r = await getProvider().chat({ task: 'ping', system: 'Reply with the single word OK.', user: 'ping', json: false });
       out.innerHTML = '<span class="ok">Connected · ' + esc(want) + ' replied “' + esc(String(r.text).trim().slice(0, 16)) + '”</span>';
-    } catch (e) { provider = null; out.innerHTML = '<span class="err">' + esc(e.message) + '</span>'; }
+    } catch (e) { provider = null; out.innerHTML = '<span class="err">' + esc(e.message) + '</span>' + (e.freeTier ? ' <button class="btn sm primary" data-action="usepreset" data-p="groq">Switch to Groq</button> <button class="btn sm" data-action="usepreset" data-p="openrouter">Use OpenRouter</button>' : ''); }
   }
   function printMemo() {
     $('#printArea').innerHTML = md($('#memoText').value, S.run.state.evById) + '<p style="margin-top:18pt;font:8pt Helvetica,Arial,sans-serif;color:#666">Generated with Groundtruth on ' + new Date().toLocaleDateString() + '. Every [i…] citation is a verified verbatim quote; see the audit log.</p>';
@@ -613,6 +613,7 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
       case 'adda': invalidate(); S.assumptions.push({ id: 'A' + (S.assumptions.length + 1), text: '' }); render(); { const ins = document.querySelectorAll('[data-bind-a]'); if (ins.length) ins[ins.length - 1].focus(); } break;
       case 'rma': invalidate(); S.assumptions.splice(+el.dataset.i, 1); renumber(); render(); break;
       case 'test': await testConnection(); break;
+      case 'usepreset': S.cfg.preset = el.dataset.p; S.cfg.model = ''; S.cfg.modelOther = false; S.cfg.key = ''; provider = null; render(); toast('Now paste your ' + presetOf().label.split(' (')[0] + ' key and test again.'); break;
       case 'usemodel': { const m = el.dataset.m; const list = presetOf().models || []; S.cfg.model = m; S.cfg.modelOther = list.includes(m) ? false : S.cfg.preset; provider = null; render(); await testConnection(); break; }
       case 'togut': {
         if (S.cfg.mode === 'live') { const g = LLM.freeGuard(S.cfg); if (!g.ok) { toast(g.msg); break; } }

@@ -52,6 +52,7 @@
           if (res.status === 400 && effortOk && /reasoning/i.test(detail)) { effortOk = false; continue; }
           if (res.status === 400 && json && jsonModeOk && /response_format|json/i.test(detail)) { jsonModeOk = false; continue; }
           if (res.status === 413) throw Object.assign(new Error('The request is too large for this free tier (HTTP 413). Use shorter transcripts, fewer interviews at once, or pick a different model.'), { fatal: true });
+          if (/free tier is not available|set up billing/i.test(detail)) throw Object.assign(new Error('This provider’s free tier is not available for your account or region, and paid plans are not allowed in this hackathon. Switch to Groq (free) or OpenRouter (:free models).'), { fatal: true, freeTier: true });
           if (res.status === 401 || res.status === 403) throw Object.assign(new Error('The provider rejected the request (HTTP ' + res.status + '): ' + (apiMsg(detail) || 'no detail') + ' Check that the key belongs to this provider and is active.'), { fatal: true, auth: true });
           if ((res.status === 429 || res.status >= 500) && attempt < 5) {
             const ra = parseFloat(res.headers.get('retry-after'));
