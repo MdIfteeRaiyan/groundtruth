@@ -123,21 +123,48 @@
       const label = name + (now ? ', current step' : done ? ', completed' : can ? '' : ', not available yet');
       return '<button class="' + cls + '" ' + (can ? 'data-action="goto" data-n="' + n + '"' : 'aria-disabled="true"') + (now ? ' aria-current="step"' : '') + ' aria-label="Step ' + n + ': ' + label + '"><b aria-hidden="true">' + (done && !now ? '✓' : n) + '</b><span aria-hidden="true">' + name + '</span></button>';
     }).join('');
+    const pb = $('#progBar'); if (pb) pb.style.width = (S.step / STEPS.length * 100) + '%';
     $('#repoLink').innerHTML = REPO_URL ? '<a class="linkbtn" href="' + esc(REPO_URL) + '" target="_blank" rel="noopener">Source code</a>' : '';
   }
 
+  let enterNext = true;
   function render() {
     const y = window.scrollY, active = document.activeElement, focusKey = active && active.id;
     renderChrome();
     $('#app').innerHTML = [null, viewSetup, viewGut, viewRun, viewReview, viewMemo][S.step]();
     window.scrollTo(0, y);
+    if (enterNext) { enterNext = false; playEnter(); }
     if (focusKey && active !== document.body) { const el = document.getElementById(focusKey); if (el && el !== active) el.focus({ preventScroll: true }); }
     save();
   }
   function go(n) {
-    S.step = n; render(); window.scrollTo({ top: 0 });
+    S.step = n; enterNext = true; render(); window.scrollTo({ top: 0 });
     const h = $('#app h1'); if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
     document.title = STEPS[n - 1] + ' · Groundtruth';
+  }
+
+  /* ---------- key sanity hints ---------- */
+  function keyWarnHtml() {
+    const k = (S.cfg.key || '').trim(), p = S.cfg.preset;
+    if (/^xai-/i.test(k)) return '<div class="notice amber">This looks like an <b>xAI Grok</b> key. xAI is a paid API, so it does not meet the hackathon’s free-tier rule. For your submission use a free <b>Groq</b> key (starts with <code>gsk_</code>, a different company). You can still try it locally via <i>Custom endpoint</i> with <code>https://api.x.ai/v1</code>.</div>';
+    if (/^gsk_/.test(k) && p !== 'groq') return '<div class="notice amber">This is a Groq key. Choose <b>Groq</b> as the provider above.</div>';
+    if (/^AIza/.test(k) && p !== 'gemini') return '<div class="notice amber">This is a Google key. Choose <b>Google Gemini</b> as the provider above.</div>';
+    return '';
+  }
+
+  /* ---------- section motion: runs only when a step is entered ---------- */
+  const calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function playEnter() {
+    if (calm || !('IntersectionObserver' in window)) return;
+    const els = [...document.querySelectorAll('#app .hero, #app .head, #app .flow, #app section.card, #app .acard, #app .notice')].filter((e, i, a) => !a.some((o) => o !== e && o.contains(e)));
+    const vh = window.innerHeight; let n = 0;
+    const io = new IntersectionObserver((ents) => ents.forEach((en) => { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } }), { rootMargin: '0px 0px -8% 0px', threshold: 0.05 });
+    els.forEach((el) => {
+      el.classList.add('rv');
+      if (el.getBoundingClientRect().top < vh) el.style.setProperty('--i', Math.min(n++, 6));
+      io.observe(el);
+    });
+    setTimeout(() => els.forEach((el) => el.classList.add('in')), 1600); // safety net: never leave content hidden
   }
 
   /* ---------- 1. setup ---------- */
@@ -153,11 +180,6 @@
         <div class="cta"><button class="btn primary lg" data-action="quick" data-id="nudgepay">Try the sample, no key needed</button><button class="btn lg" data-action="dlg" data-k="guide">How it works</button></div>
         <p class="cta-note">Two synthetic samples included: freelance invoicing, or <button data-action="quick" data-id="shiftfill">restaurant shift gaps</button>.</p>
       </section>
-      <div class="feats">
-        <div class="feat"><span class="n">01</span><h3>Verified quotes</h3><p>Every quote is checked word for word against what the customer said. Invented or paraphrased ones are thrown out, and you see which.</p></div>
-        <div class="feat"><span class="n">02</span><h3>Rules, not vibes</h3><p>The model labels evidence; transparent weighted rules compute each verdict. A red-team pass then argues the verdict is wrong.</p></div>
-        <div class="feat"><span class="n">03</span><h3>You decide</h3><p>You commit your gut first. The agent then stops: nothing becomes a decision until you accept, override or park it, with a reason.</p></div>
-      </div>
       <ol class="flow" aria-label="The five steps">
         <li><b>Setup</b>Paste interviews, list assumptions</li>
         <li class="h"><b>Gut check</b>Predict before you look</li>
@@ -200,7 +222,7 @@
             <select id="preset" data-bind="cfg.preset">${Object.keys(P).map((k) => `<option value="${k}" ${k === S.cfg.preset ? 'selected' : ''}>${esc(P[k].label)}</option>`).join('')}</select>
             <label class="f" for="model">Model</label><input type="text" id="model" data-bind="cfg.model" value="${esc(S.cfg.model)}" placeholder="${esc(pr.model || 'model name')}" autocomplete="off" spellcheck="false">
             ${S.cfg.preset === 'custom' || S.cfg.preset === 'ollama' ? `<label class="f" for="base">Base URL</label><input type="url" id="base" data-bind="cfg.baseUrl" value="${esc(S.cfg.baseUrl)}" placeholder="${esc(pr.baseUrl || 'https://…/v1')}" autocomplete="off" spellcheck="false">` : ''}
-            ${pr.needsKey ? `<label class="f" for="key">Free API key</label><input type="password" id="key" data-bind="cfg.key" value="${esc(S.cfg.key)}" autocomplete="off" spellcheck="false" placeholder="Paste key" aria-describedby="keyHelp">${pr.keyHelp ? `<p class="hint" id="keyHelp">Get one free at <a href="${esc(pr.keyHelp)}" target="_blank" rel="noopener">${esc(pr.keyHelp.replace('https://', ''))}</a>. Never saved.</p>` : ''}` : ''}
+            ${pr.needsKey ? `<label class="f" for="key">Free API key</label><input type="password" id="key" data-bind="cfg.key" value="${esc(S.cfg.key)}" autocomplete="off" spellcheck="false" placeholder="Paste key" aria-describedby="keyHelp keyWarn"><div id="keyWarn" role="status">${keyWarnHtml()}</div>${pr.keyHelp ? `<p class="hint" id="keyHelp">Get one free at <a href="${esc(pr.keyHelp)}" target="_blank" rel="noopener">${esc(pr.keyHelp.replace('https://', ''))}</a>. Never saved.</p>` : ''}` : ''}
             ${S.cfg.preset === 'ollama' ? '<p class="hint">Start Ollama with <code>OLLAMA_ORIGINS=*</code> so the page may call it. Nothing leaves your machine.</p>' : ''}
             <div class="row wrap" style="margin-top:12px"><button class="btn sm" data-action="test">Test connection</button><span class="hint" id="testOut" role="status" style="margin:0"></span></div>
           ` : '<p class="hint" style="margin-top:12px">Sandbox replays model outputs scripted by the team for the two built-in samples, so you can try the full flow with no key. Verification, scoring and the checkpoint run the real code.</p>'}
@@ -437,7 +459,7 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
       <h3>Writing good assumptions</h3>
       <ul><li>One claim per line, specific enough to be wrong: “Owners will pay €49 per month per location”, not “People like it”.</li><li>Start with the assumptions that would kill the company if false.</li></ul>
       <h3>Getting a free key</h3>
-      <p>Groq: console.groq.com/keys. Gemini: aistudio.google.com/apikey. Or run Ollama locally with no key. Keys stay in this tab and are never saved.</p>`],
+      <p>Groq (not Grok/xAI): console.groq.com/keys. Gemini: aistudio.google.com/apikey. Or run Ollama locally with no key. Keys stay in this tab and are never saved.</p>`],
     method: ['Method: how verdicts are computed', `
       <p>The model never decides a verdict. It proposes evidence and labels it; plain, testable code does the rest.</p>
       <h3>1. Quote verification</h3>
@@ -601,7 +623,7 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
       S.assumptions[+el.dataset.bindA].text = el.value;
       const b = $('[data-action=togut]'); if (b) b.disabled = !setupValid() || sandboxBlocked();
       renderChrome(); save();
-    } else if (el.dataset.bind) { setPath(S, el.dataset.bind, el.value); if (el.dataset.bind.startsWith('cfg.')) provider = null; renderChrome(); save(); }
+    } else if (el.dataset.bind) { setPath(S, el.dataset.bind, el.value); if (el.id === 'key') { const w = $('#keyWarn'); if (w) w.innerHTML = keyWarnHtml(); } if (el.dataset.bind.startsWith('cfg.')) provider = null; renderChrome(); save(); }
     else if (el.dataset.draft) draftOf(el.dataset.id)[el.dataset.draft] = el.value;
     else if (el.dataset.memo) {
       S.memo.markdown = el.value;
