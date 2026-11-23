@@ -113,7 +113,7 @@ The review time is not compressed on purpose: the product is faster at everythin
 |---|---|
 | Business value and time saved (25%) | Time-Saved Report; memo screen shows measured vs manual time |
 | Human judgment by design (20%) | Gut check locked before the run, calibration score, fragile-verdict warnings, per-assumption accept / override / park with reasons, red team on every verdict, interview coach, two hard gates, Human Judgment table |
-| Agent design and reliability (20%) | Quote verifier, rule-computed verdicts, repair retry, failure table in docs/ARCHITECTURE.md, 19 engine tests, 287 browser checks including a full live run against a fault-injecting free-tier mock |
+| Agent design and reliability (20%) | Quote verifier, rule-computed verdicts, repair retry, failure table in docs/ARCHITECTURE.md, 19 engine tests, 288 browser checks including a full live run against a fault-injecting free-tier mock |
 | Frugality and accessibility (15%) | Free-tier / open-weight only, about 8 calls per run, sandbox needs no key, no backend, no build step, runs offline on Ollama |
 | User experience (10%) | One-click demo, two samples, light and dark themes, five-step flow with clickable progress, autosave and resume, PDF export, in-app guide, method and privacy panels, WCAG 2.2 AA contrast measured on every screen, keyboard and screen-reader support, 44px touch targets, tested from 320px to 1440px |
 | Documentation and responsible AI (10%) | This document, README, architecture diagram, limitations and bias section |

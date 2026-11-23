@@ -80,7 +80,7 @@ Diagram: [docs/architecture.svg](docs/architecture.svg). Details and failure han
 node tests/run.js                         # 19 engine tests, zero dependencies
 python3 tools/contrast-check.py           # palette contrast, both themes
 npm run mock                              # fault-injecting free-tier stand-in for live-path testing
-python3 tools/browser-qa.py               # 287 browser checks (needs Playwright)
+python3 tools/browser-qa.py               # 288 browser checks (needs Playwright)
 ```
 
 The browser QA covers:

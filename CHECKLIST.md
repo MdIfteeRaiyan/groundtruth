@@ -1,6 +1,6 @@
 # Before you submit (deadline: 18 Dec 2026, 17:00 Paris time)
 
-What is finished: the app (light and dark themes, two samples, coach, calibration), 19 engine tests, 287 browser checks, the architecture diagram, screenshots, README, HOW_TO_USE.md, and the full Devpost text including a French summary.
+What is finished: the app (light and dark themes, two samples, coach, calibration), 19 engine tests, 288 browser checks, the architecture diagram, screenshots, README, HOW_TO_USE.md, and the full Devpost text including a French summary.
 
 What only you can do:
 
