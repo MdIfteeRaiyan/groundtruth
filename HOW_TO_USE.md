@@ -47,7 +47,7 @@ Sandbox mode only replays the two built-in samples. For your own interviews, use
 1. Go to https://console.groq.com/keys, sign in and click **Create API key**. Copy it.
 2. In Groundtruth, open **Setup → Model → Live model**.
 3. Provider: **Groq (free tier, open-weight Llama)**. Leave Model empty to use `llama-3.3-70b-versatile`.
-4. Paste the key, then click **Test connection**. You should see *Connected*.
+4. Paste the key, then click **Test connection**. You should see *Connected*. If the chosen model is not available to your key, the app lists the models your key can use; click one and it re-tests.
 5. Continue as in section 1. A run makes about 8 calls and takes 1 to 3 minutes.
 
 **Gemini (Google free tier):** key from https://aistudio.google.com/apikey. Provider **Google Gemini (free tier)**, default model `gemini-2.5-flash`.

@@ -145,7 +145,7 @@
 
   function modelFieldHtml(pr) {
     const list = pr.models || [], cur = S.cfg.model || '';
-    const other = !list.length || S.cfg.modelOther || (cur && !list.includes(cur));
+    const other = !list.length || (cur ? !list.includes(cur) : !!S.cfg.modelOther);
     const sel = list.length ? `<label class="f" for="modelSel">Model</label><select id="modelSel">${list.map((m) => `<option value="${esc(m)}" ${!other && (cur === m || (!cur && m === list[0])) ? 'selected' : ''}>${esc(m)}${m === list[0] ? ' (recommended)' : ''}</option>`).join('')}<option value="__other" ${other ? 'selected' : ''}>Other…</option></select>` : '';
     const txt = other ? `<label class="f" for="model">${list.length ? 'Model name' : 'Model'}</label><input type="text" id="model" data-bind="cfg.model" value="${esc(cur)}" placeholder="${esc(pr.model || 'model name')}" autocomplete="off" spellcheck="false">` : '';
     return sel + txt;
@@ -563,10 +563,18 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
   }
   async function testConnection() {
     const out = $('#testOut'); out.textContent = 'Testing…';
+    provider = null;
+    // 1. Ask the provider which models this key can use, so a wrong or retired model name is caught early.
+    let ids = [];
+    try { ids = LLM.rankModels(await LLM.listModels(S.cfg)); } catch (e) { ids = []; }
+    const want = S.cfg.model || presetOf().model;
+    if (ids.length && !ids.includes(want)) {
+      out.innerHTML = '<span class="err">“' + esc(want) + '” is not available to this key.</span> Pick one it can use: ' + ids.slice(0, 6).map((m) => '<button class="btn sm" data-action="usemodel" data-m="' + esc(m) + '">' + esc(m) + '</button>').join(' ');
+      return;
+    }
     try {
-      provider = null;
       const r = await getProvider().chat({ task: 'ping', system: 'Reply with the single word OK.', user: 'ping', json: false });
-      out.innerHTML = '<span class="ok">Connected · replied “' + esc(String(r.text).trim().slice(0, 16)) + '”</span>';
+      out.innerHTML = '<span class="ok">Connected · ' + esc(want) + ' replied “' + esc(String(r.text).trim().slice(0, 16)) + '”</span>';
     } catch (e) { provider = null; out.innerHTML = '<span class="err">' + esc(e.message) + '</span>'; }
   }
   function printMemo() {
@@ -604,6 +612,7 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
       case 'adda': invalidate(); S.assumptions.push({ id: 'A' + (S.assumptions.length + 1), text: '' }); render(); { const ins = document.querySelectorAll('[data-bind-a]'); if (ins.length) ins[ins.length - 1].focus(); } break;
       case 'rma': invalidate(); S.assumptions.splice(+el.dataset.i, 1); renumber(); render(); break;
       case 'test': await testConnection(); break;
+      case 'usemodel': { const m = el.dataset.m; const list = presetOf().models || []; S.cfg.model = m; S.cfg.modelOther = !list.includes(m); provider = null; render(); await testConnection(); break; }
       case 'togut': {
         if (S.cfg.mode === 'live') { const g = LLM.freeGuard(S.cfg); if (!g.ok) { toast(g.msg); break; } }
         go(2); break;

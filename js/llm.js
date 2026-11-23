@@ -46,8 +46,9 @@
             return { text, usage: data.usage || {} };
           }
           const detail = (await res.text().catch(() => '')).slice(0, 300);
-          if (res.status === 404 && /model/i.test(detail)) throw Object.assign(new Error('The model “' + (cfg.model || preset.model) + '” was not found. Check the spelling or pick one from the Model list.'), { fatal: true });
+          if (res.status === 404 && /model/i.test(detail)) throw Object.assign(new Error('The provider says model “' + (cfg.model || preset.model) + '” is not available to your key. Press “Test connection” to see the models your key can use. (' + detail.replace(/\s+/g, ' ').slice(0, 160) + ')'), { fatal: true, modelNotFound: true });
           if (res.status === 400 && json && jsonModeOk && /response_format|json/i.test(detail)) { jsonModeOk = false; continue; }
+          if (res.status === 413) throw Object.assign(new Error('The request is too large for this free tier (HTTP 413). Use shorter transcripts, fewer interviews at once, or pick a different model.'), { fatal: true });
           if (res.status === 401 || res.status === 403) throw Object.assign(new Error('The provider rejected the API key (HTTP ' + res.status + ').'), { fatal: true });
           if ((res.status === 429 || res.status >= 500) && attempt < 5) {
             const ra = parseFloat(res.headers.get('retry-after'));
@@ -68,5 +69,26 @@
     return { label: preset.label + ' · ' + (cfg.model || preset.model), isSandbox: false, chat };
   }
 
-  root.GT_LLM = { PRESETS, createProvider, freeGuard };
+  // Ask the provider which models this key can actually use (OpenAI-compatible GET /models).
+  const SKIP = /whisper|guard|tts|embed|playai|orpheus|moderation|image|vision|audio|transcri|rerank|safeguard/i;
+  const PREFER = [/llama-3\.3-70b/, /gpt-oss-120b/, /llama-3\.1-70b/, /gemini-2\.5-flash$/, /gemini-2\.5-flash-lite/, /gpt-oss-20b/, /llama-3\.1-8b/, /llama/i, /gemini/i];
+  async function listModels(cfg) {
+    const preset = PRESETS[cfg.preset] || PRESETS.custom;
+    const base = (cfg.baseUrl || preset.baseUrl).replace(/\/+$/, '');
+    const headers = cfg.key ? { Authorization: 'Bearer ' + cfg.key } : {};
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 15000);
+    try {
+      const res = await fetch(base + '/models', { headers, signal: ctl.signal });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const j = await res.json(); const arr = Array.isArray(j) ? j : (j.data || j.models || []);
+      let ids = arr.map((m) => String((m && (m.id || m.name)) || '').replace(/^models\//, '')).filter((x) => x && !SKIP.test(x));
+      if (cfg.preset === 'openrouter') ids = ids.filter((x) => /:free$/.test(x));
+      return [...new Set(ids)];
+    } finally { clearTimeout(t); }
+  }
+  function rankModels(ids) {
+    const score = (m) => { const i = PREFER.findIndex((r) => r.test(m)); return i < 0 ? 99 : i; };
+    return ids.slice().sort((a, b) => score(a) - score(b) || a.localeCompare(b));
+  }
+  root.GT_LLM = { PRESETS, createProvider, freeGuard, listModels, rankModels };
 })(typeof self !== 'undefined' ? self : this);

@@ -16,6 +16,7 @@ http.createServer((req, res) => {
   const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Allow-Methods': 'POST, OPTIONS, GET', 'Access-Control-Expose-Headers': 'Retry-After' };
   if (req.method === 'OPTIONS') { res.writeHead(204, cors); return res.end(); }
   if (req.url === '/stats') { res.writeHead(200, Object.assign({ 'Content-Type': 'application/json' }, cors)); return res.end(JSON.stringify(stats)); }
+  if (req.method === 'GET' && /\/models$/.test(req.url)) { res.writeHead(200, Object.assign({ 'Content-Type': 'application/json' }, cors)); return res.end(JSON.stringify({ object: 'list', data: [{ id: 'mock' }, { id: 'mock-large' }, { id: 'whisper-large-v3' }] })); }
   if (req.method !== 'POST' || !/\/chat\/completions$/.test(req.url)) { res.writeHead(404, cors); return res.end('not found'); }
   let body = '';
   req.on('data', (c) => { body += c; });
