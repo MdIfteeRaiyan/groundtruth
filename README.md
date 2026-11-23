@@ -14,7 +14,7 @@ Built for the HETIC *AI Agents for Founders* challenge (2026). Runs only on free
 
 ## Try it in 30 seconds
 
-Open `index.html` (or the live link) and click **Try the sample, no key needed**. For the full walkthrough, from first run through deployment, video and Devpost, see **[HOW_TO_USE.md](HOW_TO_USE.md)**.
+Open `index.html` or the live site at https://mdifteeraiyan.github.io/groundtruth/ and click **Try the sample, no key needed**. For the full walkthrough, from first run through deployment, video and Devpost, see **[HOW_TO_USE.md](HOW_TO_USE.md)**.
 
 ## What it does
 

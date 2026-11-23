@@ -4,7 +4,7 @@
   const GT = window.GT, LLM = window.GT_LLM, SAMPLES = window.GT_SAMPLES;
 
   // Set this to your public repository URL before deploying; a "Source" link then appears in the footer.
-  const REPO_URL = '';
+  const REPO_URL = 'https://github.com/MdIfteeRaiyan/groundtruth';
 
   const STORE = 'groundtruth.session.v1', THEME = 'groundtruth.theme';
   const $ = (s, r) => (r || document).querySelector(s);

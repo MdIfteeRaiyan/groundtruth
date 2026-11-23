@@ -119,7 +119,7 @@ The review time is not compressed on purpose: the product is faster at everythin
 | Documentation and responsible AI (10%) | This document, README, architecture diagram, limitations and bias section |
 
 ## How judges can test it at no cost
-1. **Zero setup:** open [DEPLOYED URL] (or `index.html` from the repo) and click **Try the sample, no key needed**. Sandbox mode, no key, no cost.
+1. **Zero setup:** open https://mdifteeraiyan.github.io/groundtruth/ (after GitHub Pages is enabled) (or `index.html` from the repo) and click **Try the sample, no key needed**. Sandbox mode, no key, no cost.
 2. **Real model, free:** choose **Live model**, pick Groq or Gemini, paste a free key (links in the app), and load a sample or your own synthetic transcripts. A full walkthrough is in HOW_TO_USE.md.
 3. **Fully local:** run Ollama with `OLLAMA_ORIGINS=*`, choose the Ollama preset.
 4. **Tests:** `node tests/run.js`.
@@ -135,8 +135,8 @@ The review time is not compressed on purpose: the product is faster at everythin
 - **Accessibilité :** thèmes clair et sombre, contraste WCAG 2.2 AA vérifié, utilisation complète au clavier et sur mobile.
 
 ## Links
-- Repository: [REPO URL]
-- Live demo: [DEPLOYED URL]
+- Repository: https://github.com/MdIfteeRaiyan/groundtruth
+- Live demo: https://mdifteeraiyan.github.io/groundtruth/ (after GitHub Pages is enabled)
 - Demo video (≤3 min): [YOUTUBE/VIMEO URL]
 
 ## Built with
