@@ -56,8 +56,8 @@ Open `index.html` or the live site at https://mdifteeraiyan.github.io/groundtrut
 
 | Provider | Plan | Default model | Key |
 |---|---|---|---|
-| Groq | free tier, open-weight Llama | `llama-3.3-70b-versatile` | https://console.groq.com/keys |
-| Google Gemini | free tier | `gemini-2.5-flash` | https://aistudio.google.com/apikey |
+| Groq | free tier, open-weight (gpt-oss) | `openai/gpt-oss-120b` | https://console.groq.com/keys |
+| Google Gemini | free tier | `gemini-flash-latest` | https://aistudio.google.com/apikey |
 | OpenRouter | `:free` models only (paid blocked in code) | `meta-llama/llama-3.3-70b-instruct:free` | https://openrouter.ai/keys |
 | Ollama | local, open-weight | `llama3.1:8b` | none |
 | Sandbox | no model called | n/a | none |

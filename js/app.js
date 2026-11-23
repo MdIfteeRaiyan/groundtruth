@@ -34,6 +34,7 @@
     const d = JSON.parse(localStorage.getItem(STORE) || 'null');
     if (d && d.v === 1 && (d.interviews || []).length) {
       Object.assign(S, d); S.cfg = Object.assign({ mode: 'sandbox', preset: 'groq', model: '', baseUrl: '' }, d.cfg, { key: '' });
+      if (/^(llama-3\.3-70b-versatile|llama-3\.1-8b-instant)$/.test(S.cfg.model || '')) { S.cfg.model = ''; S.cfg.modelOther = false; } // retired by Groq on 16 Aug 2026
       if (S.run && !S.run.done) { S.run = null; S.step = Math.min(S.step, 2); }
       if (S.step > 1 && !setupValid()) S.step = 1;
       restored = true;
@@ -145,7 +146,7 @@
 
   function modelFieldHtml(pr) {
     const list = pr.models || [], cur = S.cfg.model || '';
-    const other = !list.length || (cur ? !list.includes(cur) : !!S.cfg.modelOther);
+    const other = !list.length || (cur ? !list.includes(cur) : S.cfg.modelOther === S.cfg.preset);
     const sel = list.length ? `<label class="f" for="modelSel">Model</label><select id="modelSel">${list.map((m) => `<option value="${esc(m)}" ${!other && (cur === m || (!cur && m === list[0])) ? 'selected' : ''}>${esc(m)}${m === list[0] ? ' (recommended)' : ''}</option>`).join('')}<option value="__other" ${other ? 'selected' : ''}>Other…</option></select>` : '';
     const txt = other ? `<label class="f" for="model">${list.length ? 'Model name' : 'Model'}</label><input type="text" id="model" data-bind="cfg.model" value="${esc(cur)}" placeholder="${esc(pr.model || 'model name')}" autocomplete="off" spellcheck="false">` : '';
     return sel + txt;
@@ -612,7 +613,7 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
       case 'adda': invalidate(); S.assumptions.push({ id: 'A' + (S.assumptions.length + 1), text: '' }); render(); { const ins = document.querySelectorAll('[data-bind-a]'); if (ins.length) ins[ins.length - 1].focus(); } break;
       case 'rma': invalidate(); S.assumptions.splice(+el.dataset.i, 1); renumber(); render(); break;
       case 'test': await testConnection(); break;
-      case 'usemodel': { const m = el.dataset.m; const list = presetOf().models || []; S.cfg.model = m; S.cfg.modelOther = !list.includes(m); provider = null; render(); await testConnection(); break; }
+      case 'usemodel': { const m = el.dataset.m; const list = presetOf().models || []; S.cfg.model = m; S.cfg.modelOther = list.includes(m) ? false : S.cfg.preset; provider = null; render(); await testConnection(); break; }
       case 'togut': {
         if (S.cfg.mode === 'live') { const g = LLM.freeGuard(S.cfg); if (!g.ok) { toast(g.msg); break; } }
         go(2); break;
@@ -641,7 +642,7 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
     if (el.id === 'sampleSel') { if (el.value) { loadSample(el.value); render(); toast('Sample loaded: ' + SAMPLES.find((x) => x.id === el.value).title + '.'); } return; }
     if (el.dataset.action === 'act') { const d = draftOf(el.dataset.id); d.action = el.dataset.v; if (d.action !== 'override') d.verdict = ''; render(); return; }
     if (el.dataset.action === 'approve') { S.memoApproved = el.checked; render(); if (el.checked) announce('Exports unlocked.'); return; }
-    if (el.id === 'modelSel') { if (el.value === '__other') { S.cfg.modelOther = true; S.cfg.model = ''; } else { S.cfg.modelOther = false; S.cfg.model = el.value; } provider = null; render(); return; }
+    if (el.id === 'modelSel') { if (el.value === '__other') { S.cfg.modelOther = S.cfg.preset; S.cfg.model = ''; } else { S.cfg.modelOther = false; S.cfg.model = el.value; } provider = null; render(); return; }
     if (el.dataset.bind === 'cfg.preset') { S.cfg.preset = el.value; S.cfg.model = ''; S.cfg.modelOther = false; S.cfg.baseUrl = ''; provider = null; render(); return; }
     if (el.dataset.draft) draftOf(el.dataset.id)[el.dataset.draft] = el.value;
   });

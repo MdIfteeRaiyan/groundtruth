@@ -68,7 +68,7 @@ Deliberate design choices that protect judgment:
 ### Runtime models (what the agent runs on)
 | Model | Provider | Role in the agent | Plan | Calls per live run |
 |---|---|---|---|---|
-| [PRIMARY DEMO MODEL, e.g. Llama 3.3 70B Versatile] | [Groq] | Steps 1 to 4: extract, label, red-team, memo | **Free tier** (open-weight model), no billing enabled | 8 |
+| [PRIMARY DEMO MODEL, e.g. openai/gpt-oss-120b (open-weight)] | [Groq] | Steps 1 to 4: extract, label, red-team, memo | **Free tier** (open-weight model), no billing enabled | 8 |
 | Gemini 2.5 Flash (alternative) | Google AI Studio | Same roles | **Free tier**, no billing enabled | 8 |
 | Llama 3.1 8B (alternative, local) | Ollama on the user's machine | Same roles | Open-weight, local, free | 8 |
 | OpenRouter `:free` models (alternative) | OpenRouter | Same roles | Free models only (non-`:free` blocked in code) | 8 |

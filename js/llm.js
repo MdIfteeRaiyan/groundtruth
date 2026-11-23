@@ -2,8 +2,8 @@
    never leaves the user's machine except in the Authorization header sent to the provider they chose. */
 (function (root) {
   const PRESETS = {
-    gemini: { label: 'Google Gemini (free tier)', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash', models: ['gemini-2.5-flash', 'gemini-2.5-flash-lite'], needsKey: true, gapMs: 1500, keyHelp: 'https://aistudio.google.com/apikey' },
-    groq: { label: 'Groq (free tier, open-weight Llama)', baseUrl: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile', models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b'], needsKey: true, gapMs: 2500, keyHelp: 'https://console.groq.com/keys' },
+    groq: { label: 'Groq (free tier, open-weight)', baseUrl: 'https://api.groq.com/openai/v1', model: 'openai/gpt-oss-120b', models: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.6-27b'], needsKey: true, gapMs: 2500, keyHelp: 'https://console.groq.com/keys' },
+    gemini: { label: 'Google Gemini (free tier)', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-flash-latest', models: ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'], needsKey: true, gapMs: 1500, keyHelp: 'https://aistudio.google.com/apikey' },
     openrouter: { label: 'OpenRouter (":free" models only)', baseUrl: 'https://openrouter.ai/api/v1', model: 'meta-llama/llama-3.3-70b-instruct:free', models: ['meta-llama/llama-3.3-70b-instruct:free', 'openai/gpt-oss-20b:free'], needsKey: true, gapMs: 3000, keyHelp: 'https://openrouter.ai/keys' },
     ollama: { label: 'Ollama (local, open-weight)', baseUrl: 'http://localhost:11434/v1', model: 'llama3.1:8b', models: ['llama3.1:8b', 'llama3.2:3b', 'qwen2.5:7b'], needsKey: false, gapMs: 0, keyHelp: 'https://ollama.com' },
     custom: { label: 'Custom OpenAI-compatible endpoint', baseUrl: '', model: '', needsKey: false, gapMs: 1000, keyHelp: '' },
@@ -15,6 +15,7 @@
     return { ok: true, msg: '' };
   }
 
+  function apiMsg(t) { try { const j = JSON.parse(t); const m = (j.error && (j.error.message || j.error)) || j.message || (Array.isArray(j) && j[0] && j[0].error && j[0].error.message); return String(m || '').replace(/\s+/g, ' ').slice(0, 200); } catch (e) { return String(t || '').replace(/\s+/g, ' ').slice(0, 200); } }
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   function createProvider(cfg, hooks) {
@@ -22,7 +23,7 @@
     if (!guard.ok) throw new Error(guard.msg);
     const preset = PRESETS[cfg.preset] || PRESETS.custom;
     const base = (cfg.baseUrl || preset.baseUrl).replace(/\/+$/, '');
-    let last = 0, jsonModeOk = true;
+    let last = 0, jsonModeOk = true, effortOk = true;
 
     async function chat({ system, user, json }) {
       const gap = preset.gapMs - (Date.now() - last);
@@ -35,6 +36,7 @@
         try {
           const body = { model: cfg.model || preset.model, temperature: 0.2, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] };
           if (json && jsonModeOk) body.response_format = { type: 'json_object' };
+          if (effortOk && cfg.preset === 'groq' && /gpt-oss/.test(body.model)) body.reasoning_effort = 'low';
           const headers = { 'Content-Type': 'application/json' };
           if (cfg.key) headers.Authorization = 'Bearer ' + cfg.key;
           last = Date.now();
@@ -46,10 +48,11 @@
             return { text, usage: data.usage || {} };
           }
           const detail = (await res.text().catch(() => '')).slice(0, 300);
-          if (res.status === 404 && /model/i.test(detail)) throw Object.assign(new Error('The provider says model “' + (cfg.model || preset.model) + '” is not available to your key. Press “Test connection” to see the models your key can use. (' + detail.replace(/\s+/g, ' ').slice(0, 160) + ')'), { fatal: true, modelNotFound: true });
+          if (res.status === 404 && /model/i.test(detail)) throw Object.assign(new Error('The provider says model “' + (cfg.model || preset.model) + '” is not available to your key. Press “Test connection” to see the models your key can use. (' + apiMsg(detail) + ')'), { fatal: true, modelNotFound: true });
+          if (res.status === 400 && effortOk && /reasoning/i.test(detail)) { effortOk = false; continue; }
           if (res.status === 400 && json && jsonModeOk && /response_format|json/i.test(detail)) { jsonModeOk = false; continue; }
           if (res.status === 413) throw Object.assign(new Error('The request is too large for this free tier (HTTP 413). Use shorter transcripts, fewer interviews at once, or pick a different model.'), { fatal: true });
-          if (res.status === 401 || res.status === 403) throw Object.assign(new Error('The provider rejected the API key (HTTP ' + res.status + ').'), { fatal: true });
+          if (res.status === 401 || res.status === 403) throw Object.assign(new Error('The provider rejected the request (HTTP ' + res.status + '): ' + (apiMsg(detail) || 'no detail') + ' Check that the key belongs to this provider and is active.'), { fatal: true, auth: true });
           if ((res.status === 429 || res.status >= 500) && attempt < 5) {
             const ra = parseFloat(res.headers.get('retry-after'));
             const wait = Number.isFinite(ra) ? ra * 1000 : delay;
@@ -61,7 +64,7 @@
           if (err.fatal) throw err;
           if (err.name === 'AbortError') err = new Error('The provider timed out after 90s.');
           else if (err instanceof TypeError) err = new Error('Network/CORS error reaching ' + base + '. For Ollama set OLLAMA_ORIGINS=* and restart it.');
-          if (attempt < 3 && !/rejected the API key/.test(err.message)) { await sleep(delay); delay *= 2; continue; }
+          if (attempt < 3 && !/rejected the request/.test(err.message)) { await sleep(delay); delay *= 2; continue; }
           throw err;
         } finally { clearTimeout(timer); }
       }
@@ -71,7 +74,7 @@
 
   // Ask the provider which models this key can actually use (OpenAI-compatible GET /models).
   const SKIP = /whisper|guard|tts|embed|playai|orpheus|moderation|image|vision|audio|transcri|rerank|safeguard/i;
-  const PREFER = [/llama-3\.3-70b/, /gpt-oss-120b/, /llama-3\.1-70b/, /gemini-2\.5-flash$/, /gemini-2\.5-flash-lite/, /gpt-oss-20b/, /llama-3\.1-8b/, /llama/i, /gemini/i];
+  const PREFER = [/gpt-oss-120b/, /llama-3\.3-70b/, /llama-3\.1-70b/, /gemini-2\.5-flash$/, /gemini-2\.5-flash-lite/, /gpt-oss-20b/, /llama-3\.1-8b/, /llama/i, /gemini/i];
   async function listModels(cfg) {
     const preset = PRESETS[cfg.preset] || PRESETS.custom;
     const base = (cfg.baseUrl || preset.baseUrl).replace(/\/+$/, '');
