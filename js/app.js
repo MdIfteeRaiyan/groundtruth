@@ -250,7 +250,7 @@
         </section>
         ${sandboxBlocked() ? '<div class="notice amber" role="note">These are your own interviews. Sandbox only knows the built-in samples, so switch to <b>Live model</b> to analyse them (free).</div>' : ''}
         <div class="row sp wrap">
-          <span class="hint" style="margin:0">${!S.interviews.length ? 'Add at least one interview, or load a sample.' : !S.assumptions.length ? 'Add at least one assumption.' : S.interviews.length < 5 ? '<span class="warn">Fewer than 5 interviews gives weak verdicts. The app will say so.</span>' : 'Ready when you are.'}</span>
+          <span class="hint" style="margin:0">${!S.interviews.length ? 'Add at least one interview, or <button class="linkbtn" data-action="loadsample">load the sample now</button>.' : !S.assumptions.length ? 'Add at least one assumption.' : S.interviews.length < 5 ? '<span class="warn">Fewer than 5 interviews gives weak verdicts. The app will say so.</span>' : 'Ready when you are.'}</span>
           <button class="btn primary" data-action="togut" ${setupValid() && !sandboxBlocked() ? '' : 'disabled'}>Continue</button>
         </div>
       </div>
@@ -595,6 +595,7 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
     if (el.tagName === 'A') ev.preventDefault();
     switch (a) {
       case 'home': if (S.interviews.length && S.step !== 1) go(1); else window.scrollTo({ top: 0, behavior: 'smooth' }); break;
+      case 'loadsample': loadSample('nudgepay'); render(); toast('Sample loaded. Press Continue.'); break;
       case 'quick': loadSample(id); S.cfg.mode = 'sandbox'; provider = null; go(2); break;
       case 'theme': { const t = theme() === 'dark' ? 'light' : 'dark'; document.documentElement.setAttribute('data-theme', t); try { localStorage.setItem(THEME, t); } catch (_) { /* ignore */ } renderChrome(); $('[data-action=theme]').focus(); announce(t + ' theme'); break; }
       case 'dlg': openDlg(el.dataset.k); break;
