@@ -43,12 +43,14 @@
   // Returns index of the turn (of the given role) containing the quote, or -1.
   // Quotes may use "..." to skip words; every fragment must sit inside ONE turn.
   function findQuote(quote, turns, role) {
-    const parts = String(quote).split(/\.{3}|…/).map(norm).filter((p) => wordCount(p) >= 3);
-    if (!parts.length) return -1;
+    const parts = String(quote).split(/\.{3}|…/).map(norm);
+    if (!parts.length || parts.some((p) => !p) || parts.reduce((n,p) => n + wordCount(p), 0) < 3) return -1;
     for (let i = 0; i < turns.length; i++) {
       if (turns[i].role !== role) continue;
       const t = norm(turns[i].text);
-      if (parts.every((p) => t.includes(p))) return i;
+      let cursor = 0;
+      const padded = ' ' + t + ' ';
+      if (parts.every((p) => { const at = padded.indexOf(' ' + p + ' ', cursor); if (at < 0) return false; cursor = at + p.length + 1; return true; })) return i;
     }
     return -1;
   }
@@ -58,7 +60,7 @@
     const evidence = [], rejected = [], leading = [];
     const isStr = (x) => typeof x === 'string' && x.trim().length > 0;
 
-    for (const q of (raw && raw.leading_questions) || []) {
+    for (const q of (Array.isArray(raw?.leading_questions) ? raw.leading_questions : [])) {
       if (!isStr(q)) continue;
       const idx = findQuote(q, turns, 'interviewer');
       if (idx >= 0) leading.push({ text: q.trim(), turn: idx, interview: interview.id });
@@ -67,7 +69,7 @@
     const leadingTurns = new Set(leading.map((l) => l.turn));
     const seen = new Set();
 
-    for (const e of (raw && raw.evidence) || []) {
+    for (const e of (Array.isArray(raw?.evidence) ? raw.evidence : [])) {
       if (!e || !isStr(e.quote)) continue;
       if (evidence.length >= MAX_EVIDENCE_PER_INTERVIEW) break;
       const idx = findQuote(e.quote, turns, 'interviewee');
@@ -86,7 +88,7 @@
         interview: interview.id,
         who: interview.name,
         quote: e.quote.trim(),
-        kind: KIND_WEIGHT[e.kind] ? e.kind : 'opinion',
+        kind: Object.hasOwn(KIND_WEIGHT, e.kind) ? e.kind : 'opinion',
         topic: isStr(e.topic) ? e.topic.trim().slice(0, 40) : '',
         prompted,
         question: prev >= 0 ? turns[prev].text : '',
@@ -122,7 +124,7 @@
     if (verdict === 'untested') return 'Insufficient';
     const evs = ids.map((i) => evById[i]);
     const n = new Set(evs.map((e) => e.interview)).size;
-    const b = evs.filter((e) => e.kind === 'behavior' && !e.prompted).length;
+    const b = new Set(evs.filter((e) => e.kind === 'behavior' && !e.prompted).map(e => e.interview)).size;
     let c = n >= 3 && b >= 2 ? 'Strong' : (n >= 3 || (n >= 2 && b >= 1)) ? 'Moderate' : 'Weak';
     if (c === 'Strong' && totalInterviews < MIN_INTERVIEWS_FOR_STRONG) c = 'Moderate'; // small-sample cap
     return c;
@@ -131,7 +133,7 @@
   // Leave-one-out stability: does the verdict survive removing any single interviewee's evidence?
   function robustness(item, evById) {
     if (item.verdict === 'untested') return { stable: true, flips: [] };
-    const all = [...item.supporting, ...item.contradicting].filter((id) => evById[id]);
+    const all = [...item.supporting, ...item.contradicting].filter((id) => Object.hasOwn(evById, id));
     const ivs = [...new Set(all.map((id) => evById[id].interview))];
     const sum = (ids) => ids.reduce((t, id) => t + evWeight(evById[id]), 0);
     const flips = [];
@@ -148,9 +150,9 @@
   function scoreAssessment(a, evById, totalInterviews) {
     const uniq = (ids) => [...new Set((Array.isArray(ids) ? ids : []).filter((x) => typeof x === 'string'))];
     let sup = uniq(a.supporting_ids), con = uniq(a.contradicting_ids);
-    const invalid = [...sup, ...con].filter((id) => !evById[id]);
-    sup = sup.filter((id) => evById[id]);
-    con = con.filter((id) => evById[id]);
+    const invalid = [...sup, ...con].filter((id) => !Object.hasOwn(evById, id));
+    sup = sup.filter((id) => Object.hasOwn(evById, id));
+    con = con.filter((id) => Object.hasOwn(evById, id));
     const both = sup.filter((id) => con.includes(id));
     sup = sup.filter((id) => !both.includes(id));
     con = con.filter((id) => !both.includes(id));
@@ -186,7 +188,9 @@
     for (const a of assumptions) {
       const d = decisions[a.id];
       if (!d) { missing.push({ id: a.id, reason: 'No decision yet' }); continue; }
-      if (!VERDICTS.includes(d.final_verdict)) missing.push({ id: a.id, reason: 'Pick a verdict' });
+      if (!['accept', 'override', 'park'].includes(d.action)) missing.push({ id: a.id, reason: 'Choose a valid action' });
+      else if (d.action === 'park' && d.final_verdict !== 'untested') missing.push({ id: a.id, reason: 'Parked assumptions must be untested' });
+      else if (!VERDICTS.includes(d.final_verdict)) missing.push({ id: a.id, reason: 'Pick a verdict' });
       else if (d.action !== 'accept' && String(d.rationale || '').trim().length < MIN_RATIONALE)
         missing.push({ id: a.id, reason: 'Explain your override or parking in at least ' + MIN_RATIONALE + ' characters' });
     }
@@ -305,11 +309,13 @@ Write in the same language as the evidence quotes. Maximum 450 words. Return mar
     /* 2. map to assumptions (LLM labels) then score (code decides) */
     emit('stage', { stage: 'assess', status: 'active' });
     const aRaw = await call('assess', { assumptions: assumptions.map((a) => ({ id: a.id, statement: a.text })), evidence: slimEv }, true);
-    const byId = Object.fromEntries(((aRaw && aRaw.assessments) || []).map((x) => [x.assumption_id, x]));
+    if (!Array.isArray(aRaw?.assessments)) throw new Error('Invalid assessment response: expected assessments array');
+    const assessments = aRaw.assessments.filter(x => x && typeof x.assumption_id === 'string');
+    const byId = Object.fromEntries(assessments.map((x) => [x.assumption_id, x]));
     const scored = assumptions.map((a) => Object.assign(
-      scoreAssessment(Object.assign({ verdict: 'untested', supporting_ids: [], contradicting_ids: [] }, byId[a.id] || {}, { assumption_id: a.id }), evById, interviews.length),
+      scoreAssessment(Object.assign({ verdict: 'untested', supporting_ids: [], contradicting_ids: [] }, byId[a.id] || {}, { assumption_id: a.id }), evById, Object.values(perInterview).filter(p => !p.error && p.verified > 0).length),
       { statement: a.text }));
-    const insight = ((aRaw && aRaw.assessments) || []).map((x) => x.emerging_insight).find((s) => typeof s === 'string' && s.trim()) || '';
+    const insight = assessments.map((x) => x.emerging_insight).find((s) => typeof s === 'string' && s.trim()) || '';
     emit('stage', { stage: 'assess', status: 'done' });
 
     /* 3. red-team (non-fatal if it fails) */
@@ -349,11 +355,12 @@ Write in the same language as the evidence quotes. Maximum 450 words. Return mar
 
   function checkCitations(text, evById) {
     const cited = [...new Set((String(text).match(/\bi\d+-\d+\b/g) || []))];
-    return { cited, unknown: cited.filter((id) => !evById[id]) };
+    return { cited, unknown: cited.filter((id) => !Object.hasOwn(evById, id)) };
   }
 
   async function generateMemo({ provider, assumptions, state, decisions, gut, startup }) {
     const gate = checkGate(assumptions, decisions);
+    for (const a of assumptions) { const d = decisions[a.id]; const scored = state.scored.find(s => s.assumption_id === a.id); if (!scored || (d && d.action === 'accept' && d.final_verdict !== scored.verdict)) { gate.ok = false; gate.missing.push({ id: a.id, reason: 'Accepted verdict must match current analysis' }); } }
     if (!gate.ok) throw new Error('Human checkpoint incomplete: ' + gate.missing.map((m) => m.id + ' (' + m.reason + ')').join(', '));
     const rows = memoRows(assumptions, state, decisions, gut);
     const payload = { startup: startup || '', n_interviews: state.interviews.length, rejected_quotes: state.rejected.length, leading_questions: state.leading.length, emerging_insight: state.insight, rows };
