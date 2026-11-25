@@ -448,3 +448,17 @@ body::before { content: ''; position: fixed; inset: 0; z-index: -1; background: 
 .footer-credit{display:flex;flex-direction:column;gap:5px;min-width:0;overflow-wrap:anywhere}
 .footer-credit a{color:inherit;text-decoration:underline;text-underline-offset:3px}
 @media(max-width:700px){.focused-review .two{grid-template-columns:minmax(0,1fr)}.focused-review .opts{display:grid;grid-template-columns:minmax(0,1fr)}.footer-credit{width:100%}.focused-review .ovbar{flex-wrap:wrap}.quality-total strong{font-size:1.75rem}}
+
+/* Release polish: quiet, readable surfaces and a clear active review state. */
+.hero h1{text-transform:none;letter-spacing:-.045em;line-height:1.04}
+.head h1{line-height:1.15;letter-spacing:-.025em}
+.ovbar .ov.selected{outline:2px solid #a5b4fc;outline-offset:2px;color:var(--on-band)}
+.focused-review{gap:22px}
+.focused-review .side{position:static;min-width:0}
+.focused-review .acard .ahead,.focused-review .acard .abody,.focused-review .acard .decide{padding:clamp(14px,2.2vw,24px)}
+.focused-review .rule summary{cursor:pointer;font-weight:600}
+.focused-review .quote{overflow-wrap:anywhere}
+.quality-result{padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--hover)}
+.quality-total strong{color:inherit;font-variant-numeric:tabular-nums}
+.footer-credit a{min-height:24px;display:inline-flex;align-items:center}
+@media(max-width:940px){.focused-review .side{grid-template-columns:minmax(0,1fr)}.focused-review{gap:14px}}
