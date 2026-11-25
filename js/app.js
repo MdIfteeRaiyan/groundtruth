@@ -190,7 +190,7 @@
       <section class="hero" aria-labelledby="heroTitle">
         <div class="badge-top">Evidence-based · free-tier models only</div>
         <h1 id="heroTitle">Know what your interviews <em>actually prove.</em></h1>
-        <p>Paste your customer interviews and the assumptions your startup depends on. Groundtruth verifies every quote, scores each assumption with transparent rules, attacks its own verdicts, and stops until you make the call.</p>
+        <p>Paste a customer interview for instant coaching, or audit multiple interviews against your startup assumptions. Groundtruth verifies every quote, scores each assumption with transparent rules, attacks its own verdicts, and stops until you make the call.</p>
         <div class="cta"><button class="btn primary lg" data-action="quick" data-id="nudgepay">Try the sample, no key needed</button><button class="btn lg" data-action="dlg" data-k="guide">How it works</button></div>
         <p class="cta-note">Two synthetic samples included: freelance invoicing, or <button data-action="quick" data-id="shiftfill">restaurant shift gaps</button>.</p>
         <div class="peek" aria-hidden="true">
@@ -220,9 +220,11 @@
         ${S.interviews.length ? '<ul class="ilist" style="padding:0;margin-top:0">' + S.interviews.map((t, i) => { const iv = GT.makeInterview('i' + (i + 1), t); const ok = iv.turns.some((x) => x.role === 'interviewee'); return `<li class="item iv"><details data-key="iv${i}" ${S.open['iv' + i] ? 'open' : ''}><summary><span class="av" aria-hidden="true">${esc(iv.name.slice(0, 1).toUpperCase())}</span><span class="meta"><b>${esc(iv.name)}</b><small>Interview ${i + 1} · ${iv.words} words · ${iv.turns.length} turns${ok ? '' : ' · <span class="warn">no interviewee lines found</span>'}<span class="show"> · read or edit</span></small></span></summary><label class="sr-only" for="iv-${i}">Transcript of interview ${i + 1}</label><textarea id="iv-${i}" data-iv="${i}" spellcheck="false">${esc(t)}</textarea></details><button class="btn sm ghost" data-action="rmiv" data-i="${i}" aria-label="Remove interview with ${esc(iv.name)}">Remove</button></li>`; }).join('') + '</ul>' : ''}
         <label class="f" for="newIv">${S.interviews.length ? 'Add another interview' : 'Paste an interview'}</label>
         <textarea id="newIv" placeholder="Interviewer: Tell me about the last time…&#10;Maya: Last month actually…" aria-describedby="ivCount"></textarea>
-        <div class="row wrap" style="margin-top:10px"><button class="btn sm" data-action="addiv">Add interview</button>
+        <div class="row wrap" style="margin-top:10px"><button class="btn sm primary" data-action="addiv">Add interview</button><button class="btn sm" data-action="scoreiv">Score this interview</button>
           <button class="btn sm ghost" data-action="upload">${ICON.up}Upload .txt / .md</button><input type="file" id="file" accept=".txt,.md,text/plain,text/markdown" multiple hidden>
           <span class="hint grow right" id="ivCount" style="margin:0">${plural(S.interviews.length, 'interview')} · ${total.toLocaleString()} words</span></div>
+        <div id="quickScore" aria-live="polite"></div>
+        ${S.interviews.length ? `<details class="quality-library"><summary>Interview scores (${S.interviews.length})</summary>${S.interviews.map((t,i)=>`<div class="quality-entry"><h3>${esc(GT.makeInterview('i'+(i+1),t).name)}</h3>${scoreHtml(t)}</div>`).join('')}</details>` : ''}
       </section>
       <div class="stack">
         <section class="card" aria-labelledby="aTitle">
@@ -318,9 +320,24 @@
     if (e.type === 'error') { if (e.id) R.per[e.id] = { error: e.message }; R.log.push({ msg: e.message, cls: 'e' }); }
     if (S.step === 3) render();
   }
+  function qualityScore(raw) {
+    const iv = GT.makeInterview('i0', raw), turns = iv.turns.filter(t => t.text.trim()), q = turns.filter(t => t.role === 'interviewer'), a = turns.filter(t => t.role === 'interviewee');
+    if (!q.length || !a.length) return null;
+    const words = ts => ts.reduce((n,t) => n + t.text.trim().split(/\s+/).length,0);
+    const share = words(a)/(words(a)+words(q));
+    const open = q.filter(t => /^(?:tell me|describe|how\b|what\b|why\b|when\b|walk me|can you describe)/i.test(t.text)).length;
+    const past = q.filter(t => /last time|last week|last month|recent|previous|happened|did you|have you|example|experience/i.test(t.text)).length;
+    const leading = q.filter(t => /wouldn't|don.t you think|isn't it|surely|would you buy|would you pay/i.test(t.text)).length;
+    const metrics = [['Customer speaking time', Math.round(Math.min(share/.7,1)*30),30],['Open questions',Math.round(open/q.length*25),25],['Past experience questions',Math.round(past/q.length*25),25],['Neutral phrasing (heuristic)',Math.round((1-leading/q.length)*20),20]];
+    return {score:metrics.reduce((n,m)=>n+m[1],0), metrics, share, turns:turns.length, questions:q.length};
+  }
+  function scoreHtml(raw) {
+    const q = qualityScore(raw); if (!q) return '<p class="hint">Add both interviewer and customer turns to calculate a score.</p>';
+    return `<div class="quality-result"><div class="quality-total"><strong>${q.score}<small>/100</small></strong><span>Interview technique score</span></div><p class="hint">A coaching estimate, not a measure of truth or hiring ability. ${q.questions < 5 ? 'Short transcript: interpret cautiously.' : ''}</p>${q.metrics.map(([label,value,max])=>`<div class="stat"><span>${label}</span><b>${value}/${max}</b></div><div class="meter"><i style="width:${value/max*100}%"></i></div>`).join('')}<details><summary>How to improve your next interview</summary><ul><li>Ask “Tell me about the last time this happened.”</li><li>Follow up with “What did you do next?” and “What did it cost?”</li><li>Avoid suggesting the desired answer. Ask for examples before pitching your idea.</li></ul></details></div>`;
+  }
   function coachHtml(st) {
     return '<div class="coach">' + GT.interviewCoach(st.interviews, st).map((c) => `<div class="c"><header><b>${esc(c.name)}</b><span class="badge ${c.grade === 'Strong' ? 'supported' : c.grade === 'Good' ? 'untested' : 'mixed'}">${c.grade}</span></header>
-      <div class="stat"><span>Customer talk share</span><span>${Math.round(c.talk_ratio * 100)}%</span></div><div class="meter" role="img" aria-label="Customer spoke ${Math.round(c.talk_ratio * 100)} percent of the words"><i style="width:${Math.round(c.talk_ratio * 100)}%"></i></div>
+      ${scoreHtml(st.interviews.find(i=>i.id===c.id)?.raw || '')}<div class="stat"><span>Customer talk share</span><span>${Math.round(c.talk_ratio * 100)}%</span></div><div class="meter" role="img" aria-label="Customer spoke ${Math.round(c.talk_ratio * 100)} percent of the words"><i style="width:${Math.round(c.talk_ratio * 100)}%"></i></div>
       <div class="stat"><span>Concrete stories</span><span>${Math.round(c.behavior_share * 100)}% of quotes</span></div>
       ${c.tips.length ? '<ul>' + c.tips.map((t) => '<li>' + esc(t) + '</li>').join('') + '</ul>' : '<p class="hint">Clean interview: open questions, customer talking, real stories.</p>'}</div>`).join('') + '</div>';
   }
@@ -623,6 +640,7 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
       case 'mode': S.cfg.mode = el.dataset.v; provider = null; render(); break;
       case 'upload': $('#file').click(); break;
       case 'rmiv': invalidate(); S.interviews.splice(+el.dataset.i, 1); render(); toast('Interview removed.'); break;
+      case 'scoreiv': { const raw = $('#newIv').value; if (!raw.trim()) { toast('Paste an interview first.'); break; } $('#quickScore').innerHTML = scoreHtml(raw); break; }
       case 'addiv': if (addInterviewText($('#newIv').value)) { render(); toast('Interview added.'); } break;
       case 'adda': invalidate(); S.assumptions.push({ id: 'A' + (S.assumptions.length + 1), text: '' }); render(); { const ins = document.querySelectorAll('[data-bind-a]'); if (ins.length) ins[ins.length - 1].focus(); } break;
       case 'rma': invalidate(); S.assumptions.splice(+el.dataset.i, 1); renumber(); render(); break;
