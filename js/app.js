@@ -56,7 +56,7 @@
   const fmtMin = (ms) => { const m = ms / 60000; return m < 1 ? Math.max(1, Math.round(ms / 1000)) + ' sec' : (m < 10 ? m.toFixed(1) : Math.round(m)) + ' min'; };
   const isOpen = (k, def) => (k in S.open ? S.open[k] : def);
   const gate = () => GT.checkGate(S.assumptions, S.decisions);
-  function setupValid() { return S.interviews.length > 0 && S.assumptions.length > 0 && S.assumptions.every((a) => a.text.trim()); }
+  function setupValid() { return S.interviews.length > 0 && S.interviews.length <= 12 && S.interviews.every(t => typeof t === 'string' && t.trim() && t.trim().split(/\s+/).length <= 6000 && GT.makeInterview('i0', t).turns.some(x => x.role === 'interviewee' && x.text.trim())) && new Set(S.interviews.map(t => t.trim())).size === S.interviews.length && S.assumptions.length > 0 && S.assumptions.length <= 8 && S.assumptions.every(a => a.text.trim()); }
   const presetOf = () => LLM.PRESETS[S.cfg.preset] || LLM.PRESETS.custom;
   const sampleTexts = new Set(SAMPLES.flatMap((s) => s.interviews));
   const onlySampleData = () => S.interviews.length > 0 && S.interviews.every((t) => sampleTexts.has(t));
@@ -73,7 +73,7 @@
 
   function invalidate(quiet) {
     if (!S.run) return;
-    S.run = null; S.decisions = {}; S.draft = {}; S.memo = null; S.memoApproved = false; S.tMemo = null; S.open = {};
+    S.run = null; S.reviewId = ''; S.decisions = {}; S.draft = {}; S.memo = null; S.memoApproved = false; S.tMemo = null; S.open = {};
     if (!quiet) toast('Setup changed, so the previous results were cleared.');
   }
   function available(n) {
@@ -281,23 +281,28 @@
 
   /* ---------- 3. run ---------- */
   async function startRun() {
+    if (busy || (S.run && !S.run.done && !S.run.error)) return;
+    if (!setupValid()) { toast('Check transcript format, length and duplicates, and complete assumptions.'); go(1); return; }
+    if (!S.assumptions.every(a => Object.hasOwn(GUT, S.gut[a.id]))) { toast('Complete every gut prediction first.'); go(2); return; }
     if (needsKeyMissing()) { toast('Paste your free API key in Setup, or switch to Sandbox.'); go(1); return; }
     if (sandboxBlocked()) { toast('Sandbox only knows the built-in samples. Switch to Live model.'); go(1); return; }
     try { provider = null; getProvider(); } catch (e) { toast(e.message); return; }
-    S.decisions = {}; S.draft = {}; S.memo = null; S.memoApproved = false; S.tMemo = null; S.open = {};
+    S.reviewId = ''; S.decisions = {}; S.draft = {}; S.memo = null; S.memoApproved = false; S.tMemo = null; S.open = {};
     const interviews = S.interviews.map((t, i) => GT.makeInterview('i' + (i + 1), t));
     S.run = { stages: { extract: '', assess: '', redteam: '' }, per: {}, names: interviews.map((iv) => [iv.id, iv.name]), log: [], stats: { calls: 0, tokens: 0, verified: 0, rejected: 0 }, done: false, error: '', state: null, provider: provider.label, started: Date.now(), ms: 0 };
     go(3);
     announce('Agent started.');
     logLine('Run started · ' + provider.label);
+    const activeRun = S.run;
     try {
-      const state = await GT.runAgent({ provider, interviews, assumptions: S.assumptions, onEvent: onAgentEvent });
+      const state = await GT.runAgent({ provider, interviews, assumptions: S.assumptions.map(a => ({...a})), onEvent: e => { if (S.run === activeRun) onAgentEvent(e); } });
+      if (S.run !== activeRun) return;
       delete state.trace;
       S.run.state = state; S.run.done = true; S.run.ms = Date.now() - S.run.started;
       Object.assign(S.run.stats, { calls: state.usage.calls, tokens: state.usage.prompt + state.usage.completion, verified: state.evidence.length, rejected: state.rejected.length });
       logLine('Finished in ' + fmtMin(S.run.ms) + '. The agent now stops and hands over to you.');
       announce('Agent finished. ' + state.evidence.length + ' quotes verified, ' + state.rejected.length + ' rejected. The checkpoint is ready.');
-    } catch (e) { S.run.error = e.message || String(e); logLine(S.run.error, 'e'); announce('The run stopped: ' + S.run.error); }
+    } catch (e) { if (S.run !== activeRun) return; S.run.error = e.message || String(e); logLine(S.run.error, 'e'); announce('The run stopped: ' + S.run.error); }
     if (S.step === 3) render(); else save();
   }
   function logLine(msg, cls) { if (!S.run) return; S.run.log.push({ msg, cls: cls || '' }); if (S.step === 3) render(); }
@@ -365,7 +370,8 @@
   }
   function viewReview() {
     const st = S.run.state, g = gate(), nDone = S.assumptions.length - g.missing.length, cal = GT.calibration(S.gut, st.scored);
-    const cards = st.scored.map((s) => {
+    const active = st.scored.find(s => s.assumption_id === S.reviewId) || st.scored.find(s => !S.decisions[s.assumption_id]) || st.scored[0];
+    const cards = st.scored.filter(s => s === active).map((s) => {
       const id = s.assumption_id, a = S.assumptions.find((x) => x.id === id) || { text: s.statement }, ch = st.challenges[id], d = S.decisions[id], dr = draftOf(id), gut = S.gut[id];
       const others = GT.VERDICTS.filter((v) => v !== s.verdict);
       const decided = d && !dr.editing;
@@ -399,9 +405,9 @@
     }).join('');
     const ov = st.scored.map((s) => { const d = S.decisions[s.assumption_id]; const v = d ? d.final_verdict : s.verdict; return `<button class="ov ${d ? 'done' : ''}" data-action="jump" data-id="${esc(s.assumption_id)}" aria-label="${esc(s.assumption_id)}: ${LABEL[v]}, ${d ? 'decided' : 'not decided yet'}"><code>${esc(s.assumption_id)}</code><span class="dot ${v}" aria-hidden="true"></span>${d ? '✓ ' : ''}${LABEL[v]}</button>`; }).join('');
     return `
-    <div class="head"><div class="kicker">Step 4 of 5 · human checkpoint</div><h1>Challenge the evidence, then decide</h1><p>The agent has paused. Read each verdict, the quotes behind it and the case against it, then accept, override or park. The memo stays locked until all ${S.assumptions.length} are decided.</p>${ctxLine()}</div>
-    <div class="ovbar"><p class="t" role="status"><b>${nDone} of ${S.assumptions.length} decided.</b> ${g.ok ? 'You can draft the memo.' : 'Select an assumption to jump to it.'}</p><div class="ovs">${ov}</div></div>
-    <div class="reviewgrid"><div>${cards}</div>
+    <div class="head"><div class="kicker">Step 4 of 5 · human checkpoint</div><h1>Make the call, one assumption at a time.</h1><p>Review the evidence, consider the counterargument, then choose what you believe. Your judgment—not the AI—determines the final memo.</p>${ctxLine()}</div>
+    <div class="ovbar"><p class="t" role="status"><b>${nDone} of ${S.assumptions.length} decided.</b> ${g.ok ? 'You can draft the memo.' : 'Choose an assumption, review it, then save your decision.'}</p><div class="ovs">${ov}</div></div>
+    <div class="reviewgrid focused-review"><div><p class="hint review-step">Assumption ${st.scored.indexOf(active)+1} of ${st.scored.length} · Review evidence → Challenge → Decide</p>${cards}</div>
       <aside class="side" aria-label="Run summary">
         <section class="card"><h2>Your calibration</h2><p class="big">${cal.predicted ? cal.matched + '<span class="hint" style="font-size:16px"> / ' + cal.predicted + '</span>' : '—'}</p><p class="hint">${calibrationText(cal)} Surprises are where the learning is.</p></section>
         <section class="card"><h2>Run integrity</h2>
@@ -422,16 +428,17 @@
 
   /* ---------- 5. memo ---------- */
   const manualMin = (n) => 20 * n + 105;
+  function canExport() { return !!(S.memoApproved && S.memo && S.run?.done && gate().ok && !GT.checkCitations(S.memo.markdown, S.run.state.evById).unknown.length && (!S.run.state.evidence.length || GT.checkCitations(S.memo.markdown, S.run.state.evById).cited.length)); }
   function citeStatus() {
     const c = GT.checkCitations(S.memo.markdown, S.run.state.evById);
-    return c.unknown.length ? `<span class="err">${plural(c.unknown.length, 'citation')} point at nothing: ${esc(c.unknown.join(', '))}</span>` : `<span class="ok">✓ All ${c.cited.length} citations match verified quotes</span>`;
+    return !c.cited.length ? '<span class="err">No evidence citations yet. Add a verified reference before export.</span>' : c.unknown.length ? `<span class="err">${plural(c.unknown.length, 'citation')} point at nothing: ${esc(c.unknown.join(', '))}</span>` : `<span class="ok">✓ All ${c.cited.length} citations match verified quotes</span>`;
   }
   function viewMemo() {
     const M = S.memo, n = S.run.state.interviews.length, cal = GT.calibration(S.gut, S.run.state.scored);
     const head = `<div class="head"><div class="kicker">Step 5 of 5 · your decision memo</div><h1>A memo built only from your decisions</h1><p>The model drafts prose from your final verdicts and reasons. Every claim must cite a verified quote; code checks each citation and appends the audit trail itself.</p>${ctxLine()}</div>`;
     if (!M) return head + `<section class="card"><div class="row sp wrap"><p class="sub" style="margin:0">All ${S.assumptions.length} assumptions decided. Drafting takes one model call.</p><div class="row wrap"><button class="btn" data-action="goto" data-n="4">Back to checkpoint</button><button class="btn primary" data-action="genmemo" ${busy ? 'disabled' : ''}>${busy ? 'Drafting…' : 'Draft the memo'}</button></div></div></section>`;
     const elapsed = (S.tMemo || Date.now()) - S.t0;
-    const ex = S.memoApproved ? '' : 'disabled';
+    const ex = canExport() ? '' : 'disabled';
     return head + `
     <section class="card" style="margin-bottom:16px" aria-label="Time saved"><div class="timebox">
       <div><big class="acc">${fmtMin(elapsed)}</big><span class="hint">this session, measured</span></div>
@@ -558,6 +565,7 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
     const chk = GT.checkGate([{ id }], { [id]: rec });
     if (!chk.ok) { toast(chk.missing[0].reason + '.'); const t = (!rec.final_verdict && document.getElementById('ov-' + id)) || document.getElementById('rat-' + id); if (t) t.focus(); return; }
     S.decisions[id] = rec; dr.editing = false;
+    S.reviewId = (S.assumptions.find(a => !S.decisions[a.id]) || {id}).id;
     S.memo = null; S.memoApproved = false;
     render();
     const left = S.assumptions.filter((a) => !S.decisions[a.id]).length;
@@ -597,6 +605,7 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
     if (!el || el.tagName === 'INPUT') return;
     const a = el.dataset.action, id = el.dataset.id;
     if (el.tagName === 'A') ev.preventDefault();
+    if (['dlmemo','pdf','dlaudit','copy'].includes(a) && !canExport()) { toast('Approve a memo with valid evidence citations first.'); return; }
     switch (a) {
       case 'home': if (S.interviews.length && S.step !== 1) go(1); else window.scrollTo({ top: 0, behavior: 'smooth' }); break;
       case 'loadsample': loadSample('nudgepay'); render(); toast('Sample loaded. Press Continue.'); break;
@@ -618,7 +627,7 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
       case 'adda': invalidate(); S.assumptions.push({ id: 'A' + (S.assumptions.length + 1), text: '' }); render(); { const ins = document.querySelectorAll('[data-bind-a]'); if (ins.length) ins[ins.length - 1].focus(); } break;
       case 'rma': invalidate(); S.assumptions.splice(+el.dataset.i, 1); renumber(); render(); break;
       case 'test': await testConnection(); break;
-      case 'usepreset': S.cfg.preset = el.dataset.p; S.cfg.model = ''; S.cfg.modelOther = false; S.cfg.key = ''; provider = null; render(); toast('Now paste your ' + presetOf().label.split(' (')[0] + ' key and test again.'); break;
+      case 'usepreset': S.cfg.preset = el.dataset.p; S.cfg.baseUrl = ''; S.cfg.model = ''; S.cfg.modelOther = false; S.cfg.key = ''; provider = null; render(); toast('Now paste your ' + presetOf().label.split(' (')[0] + ' key and test again.'); break;
       case 'usemodel': { const m = el.dataset.m; const list = presetOf().models || []; S.cfg.model = m; S.cfg.modelOther = list.includes(m) ? false : S.cfg.preset; provider = null; render(); await testConnection(); break; }
       case 'togut': {
         if (S.cfg.mode === 'live') { const g = LLM.freeGuard(S.cfg); if (!g.ok) { toast(g.msg); break; } }
@@ -626,7 +635,7 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
       }
       case 'gut': S.gut[id] = el.dataset.v; render(); break;
       case 'run': startRun(); break;
-      case 'jump': { const c = document.getElementById('card-' + id); if (c) { c.scrollIntoView({ behavior: 'smooth', block: 'start' }); const f = c.querySelector('input,button.btn'); if (f) setTimeout(() => f.focus({ preventScroll: true }), 350); } break; }
+      case 'jump': { S.reviewId = id; render(); const c = document.getElementById('card-' + id); if (c) { c.scrollIntoView({ behavior: 'smooth', block: 'start' }); const f = c.querySelector('input,button.btn'); if (f) setTimeout(() => f.focus({ preventScroll: true }), 350); } break; }
       case 'edit': { const d = S.decisions[id]; S.draft[id] = { action: d.action, verdict: d.action === 'override' ? d.final_verdict : '', rationale: d.rationale || '', editing: true }; render(); const r = document.querySelector('input[name="act-' + id + '"]:checked'); if (r) r.focus(); break; }
       case 'canceledit': draftOf(id).editing = false; render(); break;
       case 'save': saveDecision(id); break;
@@ -647,10 +656,10 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
     }
     if (el.id === 'sampleSel') { if (el.value) { loadSample(el.value); render(); toast('Sample loaded: ' + SAMPLES.find((x) => x.id === el.value).title + '.'); } return; }
     if (el.dataset.action === 'act') { const d = draftOf(el.dataset.id); d.action = el.dataset.v; if (d.action !== 'override') d.verdict = ''; render(); return; }
-    if (el.dataset.action === 'approve') { S.memoApproved = el.checked; render(); if (el.checked) announce('Exports unlocked.'); return; }
+    if (el.dataset.action === 'approve') { S.memoApproved = el.checked; if (el.checked && !canExport()) { S.memoApproved = false; toast('Add valid evidence citations before approving.'); } render(); if (S.memoApproved) announce('Exports unlocked.'); return; }
     if (el.dataset.iv != null) { render(); return; }
     if (el.id === 'modelSel') { if (el.value === '__other') { S.cfg.modelOther = S.cfg.preset; S.cfg.model = ''; } else { S.cfg.modelOther = false; S.cfg.model = el.value; } provider = null; render(); return; }
-    if (el.dataset.bind === 'cfg.preset') { S.cfg.preset = el.value; S.cfg.model = ''; S.cfg.modelOther = false; S.cfg.baseUrl = ''; provider = null; render(); return; }
+    if (el.dataset.bind === 'cfg.preset') { S.cfg.preset = el.value; S.cfg.key = ''; S.cfg.model = ''; S.cfg.modelOther = false; S.cfg.baseUrl = ''; provider = null; render(); return; }
     if (el.dataset.draft) draftOf(el.dataset.id)[el.dataset.draft] = el.value;
   });
 
@@ -662,10 +671,11 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
       S.assumptions[+el.dataset.bindA].text = el.value;
       const b = $('[data-action=togut]'); if (b) b.disabled = !setupValid() || sandboxBlocked();
       renderChrome(); save();
-    } else if (el.dataset.bind) { setPath(S, el.dataset.bind, el.value); if (el.id === 'key') { const w = $('#keyWarn'); if (w) w.innerHTML = keyWarnHtml(); } if (el.dataset.bind.startsWith('cfg.')) provider = null; renderChrome(); save(); }
+    } else if (el.dataset.bind) { setPath(S, el.dataset.bind, el.value); if (el.id === 'key') { const w = $('#keyWarn'); if (w) w.innerHTML = keyWarnHtml(); } if (el.dataset.bind.startsWith('cfg.')) { provider = null; if (el.dataset.bind === 'cfg.baseUrl') S.cfg.key = ''; } renderChrome(); save(); }
     else if (el.dataset.draft) draftOf(el.dataset.id)[el.dataset.draft] = el.value;
     else if (el.dataset.memo) {
       S.memo.markdown = el.value;
+      S.memo.citations = GT.checkCitations(el.value, S.run.state.evById);
       $('#preview').innerHTML = md(el.value, S.run.state.evById);
       $('#citeStatus').innerHTML = citeStatus();
       if (S.memoApproved) lockExports();
