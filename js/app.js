@@ -72,7 +72,9 @@
   const sandboxBlocked = () => S.cfg.mode === 'sandbox' && S.interviews.length > 0 && !onlySampleData();
 
   function invalidate(quiet) {
+    S.gut = {};
     if (!S.run) return;
+    if (!S.run.done && provider?.cancel) provider.cancel();
     S.run = null; S.reviewId = ''; S.decisions = {}; S.draft = {}; S.memo = null; S.memoApproved = false; S.tMemo = null; S.open = {};
     if (!quiet) toast('Setup changed, so the previous results were cleared.');
   }
@@ -360,7 +362,7 @@
         ${stage('assess', 'Weigh evidence against each assumption', 'The model labels; rules decide. Behaviour 1.0, opinion 0.5, hypothetical 0.25, led answers halved.')}
         ${stage('redteam', 'Red-team every verdict', 'A second pass argues the strongest case that the agent is wrong.')}
       </ol>
-      ${R.error ? `<div class="notice red" role="alert" style="margin-top:14px">${esc(R.error)}</div><div class="row" style="margin-top:12px"><button class="btn" data-action="goto" data-n="1">Check setup</button><button class="btn primary" data-action="run">Try again</button></div>` : ''}
+      ${!R.done && !R.error ? '<button class="btn sm" data-action="cancelrun">Cancel analysis</button>' : ''}${R.error ? `<div class="notice red" role="alert" style="margin-top:14px">${esc(R.error)}</div><div class="row" style="margin-top:12px"><button class="btn" data-action="goto" data-n="1">Check setup</button><button class="btn primary" data-action="run">Try again</button></div>` : ''}
       <details data-key="runlog" ${isOpen('runlog', !R.done) ? 'open' : ''} style="margin-top:14px"><summary class="hint" style="margin:0">Technical log</summary><div class="log">${R.log.map((l) => `<div class="${l.cls}">${esc(l.msg)}</div>`).join('')}</div></details>
     </section>
     ${R.done ? `<section class="card" style="margin-top:16px" aria-labelledby="coachTitle"><h2 id="coachTitle">Interview coach</h2><p class="sub">Computed by code from your transcripts: how to get stronger evidence in your next round of interviews.</p>${coachHtml(R.state)}</section>
@@ -373,9 +375,9 @@
   }
   function evList(ids, evById, key, emptyMsg) {
     if (!ids.length) return '<div class="none">' + emptyMsg + '</div>';
-    const head = ids.slice(0, 3).map((id) => evCard(evById[id])).join('');
-    if (ids.length <= 3) return head;
-    return head + `<details class="more" data-key="${key}" ${isOpen(key, false) ? 'open' : ''}><summary>Show ${ids.length - 3} more</summary>${ids.slice(3).map((id) => evCard(evById[id])).join('')}</details>`;
+    const head = ids.slice(0, 2).map((id) => evCard(evById[id])).join('');
+    if (ids.length <= 2) return head;
+    return head + `<details class="more" data-key="${key}" ${isOpen(key, false) ? 'open' : ''}><summary>Show ${ids.length - 2} more</summary>${ids.slice(2).map((id) => evCard(evById[id])).join('')}</details>`;
   }
   function draftOf(id) {
     if (!S.draft[id]) { const d = S.decisions[id]; S.draft[id] = { action: d ? d.action : '', verdict: d && d.action === 'override' ? d.final_verdict : '', rationale: d ? d.rationale || '' : '', editing: false }; }
@@ -401,7 +403,7 @@
             <div class="col s"><h4><span>Supports</span><span aria-label="weight ${s.support_weight}">${s.support_weight}</span></h4>${evList(s.supporting, st.evById, 'ms-' + id, 'No supporting evidence.')}</div>
             <div class="col c"><h4><span>Contradicts</span><span aria-label="weight ${s.contra_weight}">${s.contra_weight}</span></h4>${evList(s.contradicting, st.evById, 'mc-' + id, 'No contradicting evidence.')}</div>
           </div>
-          <div class="rule"><b>How the verdict was computed.</b> Supported if support ≥ 2× contradiction, contradicted if the reverse, otherwise mixed; at least two interviewees required. Here ${s.support_weight} vs ${s.contra_weight} from ${plural(s.interviewees, 'interviewee')}.${s.reasoning ? ' <b>Model’s note:</b> ' + esc(s.reasoning) : ''}</div>
+          <details class="rule"><summary>How the verdict was computed</summary> Supported if support ≥ 2× contradiction, contradicted if the reverse, otherwise mixed; at least two interviewees required. Here ${s.support_weight} vs ${s.contra_weight} from ${plural(s.interviewees, 'interviewee')}.${s.reasoning ? ' <b>Model’s note:</b> ' + esc(s.reasoning) : ''}</details>
           ${s.verdict === 'untested' ? '' : rob.stable ? '<div class="rule"><b>Robustness check.</b> The verdict holds when any single interviewee’s evidence is removed.</div>' : `<div class="notice amber" role="note"><span><b>Fragile verdict.</b> It changes if you drop one person: ${rob.flips.map((f) => 'without ' + esc(f.who) + ' it becomes ' + LABEL[f.becomes]).join('; ')}. Interview more people before acting on it.</span></div>`}
           ${s.disagree ? `<div class="notice amber" role="note">The model said “${LABEL[s.model_verdict]}” but the evidence weights say “${LABEL[s.verdict]}”. The rules win; check the quotes yourself.</div>` : ''}
           ${s.invalid_refs ? `<div class="notice amber" role="note">${plural(s.invalid_refs, 'evidence reference')} from the model pointed at nothing and ${s.invalid_refs === 1 ? 'was' : 'were'} ignored.</div>` : ''}
@@ -420,7 +422,7 @@
         </div>
       </article>`;
     }).join('');
-    const ov = st.scored.map((s) => { const d = S.decisions[s.assumption_id]; const v = d ? d.final_verdict : s.verdict; return `<button class="ov ${d ? 'done' : ''}" data-action="jump" data-id="${esc(s.assumption_id)}" aria-label="${esc(s.assumption_id)}: ${LABEL[v]}, ${d ? 'decided' : 'not decided yet'}"><code>${esc(s.assumption_id)}</code><span class="dot ${v}" aria-hidden="true"></span>${d ? '✓ ' : ''}${LABEL[v]}</button>`; }).join('');
+    const ov = st.scored.map((s) => { const d = S.decisions[s.assumption_id]; const v = d ? d.final_verdict : s.verdict; return `<button class="ov ${d ? 'done' : ''} ${s === active ? 'selected' : ''}" ${s === active ? 'aria-current="true"' : ''} data-action="jump" data-id="${esc(s.assumption_id)}" aria-label="${esc(s.assumption_id)}: ${LABEL[v]}, ${d ? 'decided' : 'not decided yet'}"><code>${esc(s.assumption_id)}</code><span class="dot ${v}" aria-hidden="true"></span>${d ? '✓ ' : ''}${LABEL[v]}</button>`; }).join('');
     return `
     <div class="head"><div class="kicker">Step 4 of 5 · human checkpoint</div><h1>Make the call, one assumption at a time.</h1><p>Review the evidence, consider the counterargument, then choose what you believe. Your judgment—not the AI—determines the final memo.</p>${ctxLine()}</div>
     <div class="ovbar"><p class="t" role="status"><b>${nDone} of ${S.assumptions.length} decided.</b> ${g.ok ? 'You can draft the memo.' : 'Choose an assumption, review it, then save your decision.'}</p><div class="ovs">${ov}</div></div>
@@ -479,8 +481,10 @@
   }
   async function genMemo() {
     if (needsKeyMissing()) { toast('Re-enter your free API key in Setup to draft the memo (keys are never saved).'); return; }
+    if (busy || !S.run?.done || !gate().ok) return;
+    const activeRun = S.run, decisions = S.decisions, signature = JSON.stringify(decisions);
     busy = true; render(); announce('Drafting the memo.');
-    try { S.memo = await GT.generateMemo({ provider: getProvider(), assumptions: S.assumptions, state: S.run.state, decisions: S.decisions, gut: S.gut, startup: S.startup }); S.tMemo = Date.now(); S.memoApproved = false; announce('Memo ready. Review and edit it, then confirm to unlock exports.'); }
+    try { const draft = await GT.generateMemo({ provider: getProvider(), assumptions: S.assumptions, state: activeRun.state, decisions, gut: S.gut, startup: S.startup }); if (S.run !== activeRun || JSON.stringify(S.decisions) !== signature) { busy = false; render(); return; } S.memo = draft; S.tMemo = Date.now(); S.memoApproved = false; announce('Memo ready. Review and edit it, then confirm to unlock exports.'); }
     catch (e) { toast(e.message); }
     busy = false; render();
   }
@@ -612,9 +616,11 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
     window.print();
   }
   function newSession() {
+    if (provider?.cancel) provider.cancel();
+    clearTimeout(saveTimer);
     try { localStorage.removeItem(STORE); } catch (_) { /* ignore */ }
     Object.assign(S, { step: 1, interviews: [], assumptions: [], startup: '', sampleId: '', gut: {}, run: null, decisions: {}, draft: {}, memo: null, memoApproved: false, t0: Date.now(), tMemo: null, open: {} });
-    provider = null; go(1); toast('New session started.');
+    S.reviewId = ''; S.cfg.key = ''; provider = null; go(1); toast('New session started.');
   }
 
   document.addEventListener('click', async (ev) => {
@@ -651,8 +657,9 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
         if (S.cfg.mode === 'live') { const g = LLM.freeGuard(S.cfg); if (!g.ok) { toast(g.msg); break; } }
         go(2); break;
       }
-      case 'gut': S.gut[id] = el.dataset.v; render(); break;
+      case 'gut': if (S.run) break; S.gut[id] = el.dataset.v; render(); break;
       case 'run': startRun(); break;
+      case 'cancelrun': if (S.run && !S.run.done) { if (provider?.cancel) provider.cancel(); S.run = null; provider = null; go(2); toast('Analysis cancelled.'); } break;
       case 'jump': { S.reviewId = id; render(); const c = document.getElementById('card-' + id); if (c) { c.scrollIntoView({ behavior: 'smooth', block: 'start' }); const f = c.querySelector('input,button.btn'); if (f) setTimeout(() => f.focus({ preventScroll: true }), 350); } break; }
       case 'edit': { const d = S.decisions[id]; S.draft[id] = { action: d.action, verdict: d.action === 'override' ? d.final_verdict : '', rationale: d.rationale || '', editing: true }; render(); const r = document.querySelector('input[name="act-' + id + '"]:checked'); if (r) r.focus(); break; }
       case 'canceledit': draftOf(id).editing = false; render(); break;
@@ -669,7 +676,7 @@ Maya: Last month. A client sat on a 2,400 euro invoice for 47 days.</pre>
     const el = ev.target;
     if (el.id === 'file') {
       const files = [...el.files];
-      Promise.all(files.map((f) => f.text().then((t) => addInterviewText(t, f.name)))).then((r) => { el.value = ''; render(); const n = r.filter(Boolean).length; if (n) toast(plural(n, 'interview') + ' added.'); });
+      Promise.all(files.map((f) => f.size > 150000 ? Promise.resolve(false) : f.text().then((t) => addInterviewText(t, f.name)).catch(() => { toast('Could not read ' + f.name); return false; }))).then((r) => { el.value = ''; render(); const n = r.filter(Boolean).length; if (n) toast(plural(n, 'interview') + ' added.'); });
       return;
     }
     if (el.id === 'sampleSel') { if (el.value) { loadSample(el.value); render(); toast('Sample loaded: ' + SAMPLES.find((x) => x.id === el.value).title + '.'); } return; }
