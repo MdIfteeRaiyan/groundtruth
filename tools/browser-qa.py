@@ -69,6 +69,7 @@ async def sandbox_to_memo(pg, sample='nudgepay'):
 
 async def decide(pg, n):
     for i in range(1,n+1):
+        await pg.click(f'.ov[data-id=A{i}]')
         if await pg.locator(f'#card-A{i} .done-line').count(): continue
         if i==3:
             await pg.click('#card-A3 label.opt:has(input[data-v=override])')
@@ -104,7 +105,7 @@ async def main():
         # keyboard: decide A1 with keyboard only
         await pg.focus('input[name=act-A1][data-v=accept]'); await pg.keyboard.press('Space'); await pg.wait_for_timeout(100)
         await pg.focus('#card-A1 [data-action=save]'); await pg.keyboard.press('Enter'); await pg.wait_for_timeout(200)
-        ok('keyboard-only decision works', await pg.locator('#card-A1 .done-line').count()==1)
+        ok('keyboard-only decision works', await pg.locator('.ov.done[data-id=A1]').count()==1)
         await decide(pg, n)  # re-decides A1 harmlessly? A1 already decided -> skip handled below
         ok('all decided', await pg.locator('.ov.done').count()==n)
         await pg.click('.side [data-action=goto][data-n="5"]'); await pg.click('[data-action=genmemo]'); await pg.wait_for_selector('#memoText')
@@ -164,7 +165,10 @@ async def main():
         await pg.click('[data-action=run]'); await pg.wait_for_selector('.btn[data-action=goto][data-n="4"]', timeout=120000)
         ok('429 handled live', 'HTTP 429' in await pg.inner_text('.log'))
         await pg.click('.btn[data-action=goto][data-n="4"]'); await pg.wait_for_selector('.acard')
-        v=[await pg.inner_text(f'#card-A{i} .badge:first-child') for i in range(1,6)]
+        v=[]
+        for i in range(1,6):
+            await pg.click(f'.ov[data-id=A{i}]')
+            v.append(await pg.inner_text(f'#card-A{i} .badge:first-child'))
         ok('live verdicts', v==['Agent: Supported','Agent: Mixed','Agent: Contradicted','Agent: Contradicted','Agent: Mixed'], v)
         await decide(pg,5); await pg.click('.side [data-action=goto][data-n="5"]'); await pg.click('[data-action=genmemo]'); await pg.wait_for_selector('#memoText', timeout=30000)
         ok('live memo valid', 'All' in await pg.inner_text('#citeStatus'))
@@ -200,10 +204,17 @@ async def main():
         # robustness surfaced in the UI
         ctx = await b.new_context(viewport={'width':1280,'height':860}); pg = await ctx.new_page(); hook(pg)
         await pg.goto(URL); await sandbox_to_memo(pg, 'shiftfill'); await pg.click('.btn[data-action=goto][data-n="4"]'); await pg.wait_for_selector('.acard')
-        ok('fragile badges shown', await pg.locator('.badge.fragile').count()==3 and await pg.locator('.badge.robust').count()==1)
+        fragile=robust=0
+        for i in range(1,5):
+            await pg.click(f'.ov[data-id=A{i}]')
+            fragile += await pg.locator('.acard .badge.fragile').count()
+            robust += await pg.locator('.acard .badge.robust').count()
+        ok('fragile badges shown', fragile==3 and robust==1)
+        await pg.click('.ov[data-id=A3]')
         ok('fragile explanation names the person', 'without Sofia' in await pg.inner_text('#card-A3'))
         await ctx.close()
         ok('no console/page errors', not errs, errs[:5])
         await b.close()
     passed=sum(r for _,r in R); print(f'\n{passed}/{len(R)} checks passed')
+    if passed != len(R): sys.exit(1)
 asyncio.run(main())
