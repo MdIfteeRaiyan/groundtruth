@@ -24,15 +24,17 @@
     if (!guard.ok) throw new Error(guard.msg);
     const preset = PRESETS[cfg.preset] || PRESETS.custom;
     const base = ((cfg.preset === 'custom' || cfg.preset === 'ollama') ? (cfg.baseUrl || preset.baseUrl) : preset.baseUrl).replace(/\/+$/, '');
-    let last = 0, jsonModeOk = true, effortOk = true;
+    let last = 0, jsonModeOk = true, effortOk = true, cancelled = false, active = null;
+    const check = () => { if (cancelled) throw Object.assign(new Error('Analysis cancelled'), {fatal:true, cancelled:true}); };
+    const pause = async ms => { const end = Date.now()+ms; while(Date.now()<end){check(); await sleep(Math.min(250, end-Date.now()));} check(); };
 
     async function chat({ system, user, json }) {
       const gap = preset.gapMs - (Date.now() - last);
-      if (gap > 0) await sleep(gap);
+      check(); if (gap > 0) await pause(gap);
       let attempt = 0, delay = 4000;
       for (;;) {
-        attempt++;
-        const ctl = new AbortController();
+        check(); attempt++;
+        const ctl = new AbortController(); active = ctl;
         const timer = setTimeout(() => ctl.abort(), 90000);
         try {
           const body = { model: cfg.model || preset.model, temperature: 0.2, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] };
@@ -59,19 +61,19 @@
             const ra = parseFloat(res.headers.get('retry-after'));
             const wait = Number.isFinite(ra) ? Math.max(0, Math.min(ra * 1000, 30000)) : Math.min(delay, 30000);
             if (hooks && hooks.onRetry) hooks.onRetry('HTTP ' + res.status + ': waiting ' + Math.round(wait / 1000) + 's (free-tier rate limit), retry ' + attempt + '/4');
-            await sleep(wait); delay *= 2; continue;
+            await pause(wait); delay *= 2; continue;
           }
           throw Object.assign(new Error('Provider error HTTP ' + res.status + ': ' + detail), { fatal: true });
         } catch (err) {
-          if (err.fatal) throw err;
+          check(); if (err.fatal) throw err;
           if (err.name === 'AbortError') err = new Error('The provider timed out after 90s.');
           else if (err instanceof TypeError) err = new Error('Network/CORS error reaching ' + base + '. For Ollama set OLLAMA_ORIGINS=* and restart it.');
-          if (attempt < 3 && !/rejected the request/.test(err.message)) { await sleep(delay); delay *= 2; continue; }
+          if (attempt < 3 && !/rejected the request/.test(err.message)) { await pause(delay); delay *= 2; continue; }
           throw err;
-        } finally { clearTimeout(timer); }
+        } finally { clearTimeout(timer); if(active===ctl) active=null; }
       }
     }
-    return { label: preset.label + ' · ' + (cfg.model || preset.model), isSandbox: false, chat };
+    return { label: preset.label + ' · ' + (cfg.model || preset.model), isSandbox: false, chat, cancel() { cancelled=true; active?.abort(); } };
   }
 
   // Ask the provider which models this key can actually use (OpenAI-compatible GET /models).
