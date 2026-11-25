@@ -9,7 +9,7 @@ An agent that audits your customer interviews, argues against itself, and refuse
 **Synthesising customer-discovery interviews into evidence-backed decisions.**
 Founders run 5 to 20 interviews to test their riskiest assumptions, then spend hours re-reading transcripts, tagging quotes, clustering themes and writing a memo. Two things go wrong. It eats half a day. And confirmation bias quietly picks the quotes that flatter the idea: one enthusiastic "that sounds amazing", given in answer to a leading question, outweighs three people describing what they actually do.
 
-Groundtruth automates the mechanical 80% (extraction, mapping, scoring, drafting) and forces the human to do the 20% that matters: challenging the evidence and making the call.
+Groundtruth automates mechanical tasks (extraction, mapping, scoring, drafting) and requires the human to do the work that matters: challenging the evidence and making the call.
 
 ## What it does
 0. **Two synthetic samples** (freelance invoicing, restaurant shift gaps) let anyone run the full flow in Sandbox mode with no key.
@@ -20,6 +20,9 @@ Groundtruth automates the mechanical 80% (extraction, mapping, scoring, drafting
 Alongside the verdicts, an **interview coach** (pure code) scores each transcript on talk share, leading questions, future-tense questions and the share of concrete stories, so the founder interviews better next round. A **leave-one-out robustness check** (pure code) re-runs every verdict with each interviewee removed and flags verdicts that hinge on one person. A **calibration score** shows how many of the founder's committed predictions the evidence confirmed.
 
 5. **Decision memo.** Locked until all assumptions are decided. The model drafts prose from the *human-final* verdicts only; every claim must cite a verified quote id; code checks the citations and appends an audit table. Export is locked until the founder ticks "this reflects my judgment".
+
+## Interview coaching
+The keyless transcript scorecard provides a transparent 0–100 heuristic based on customer word share, open-ended prompts, past-experience prompts and neutral phrasing. It is a coaching aid, not a validated psychometric or factual-accuracy score; the language-dependent patterns can miss questions. The full audit retains mandatory founder decisions.
 
 ## Architecture
 See `docs/architecture.svg` (also in the repo README). Models propose, code verifies, the human decides. The app is static HTML/JS with no backend; the only network call goes to the founder's chosen free-tier or local model.
@@ -81,10 +84,10 @@ Only one provider is needed per run. [Confirm which provider and model your demo
 **Where code, not AI, does the work:** transcript parsing, quote verification, JSON repair, evidence weighting, verdict and confidence, leave-one-out robustness, interview coach, calibration, the human gate, citation checking, audit-trail table, exports.
 
 ### AI-assisted building (declared)
-Claude (Anthropic) was used as a coding and writing assistant to help design the workflow, write the JavaScript, tests, documentation and diagram, and to review the UI. [State the plan you used for this assistance, e.g. "Claude, accessed via a subscription".] All generated code was run and tested by the team (`node tests/run.js`, plus end-to-end browser runs). The Equal Access policy restricts the agent's **runtime** models, which are free-tier or open-weight as listed above; AI-assisted building is declared here as required.
+Claude (Anthropic) was used as a coding and writing assistant to help design the workflow, write the JavaScript, tests, documentation and diagram, and to review the UI. [State the plan you used for this assistance, e.g. "Claude, accessed via a subscription".] ChatGPT (OpenAI) also assisted with evidence-verification hardening, checkpoint navigation, interview scoring, security fixes and regression-test updates. [Confirm the development-tool plans used.] Consult the final GitHub Actions results and complete the live-provider and browser release checks before claiming they passed. The Equal Access policy restricts the agent's **runtime** models, which are free-tier or open-weight as listed above; AI-assisted building is declared here as required.
 
 ### Other tools and components
-Browser `fetch`, no third-party JavaScript libraries, no CDN assets, no analytics. Node.js ≥ 18 only to run the test file. Icons and fonts are system fonts and inline SVG.
+Browser `fetch`, no third-party JavaScript libraries, Google Fonts stylesheet and font requests, no analytics. Node.js ≥ 18 only to run the test file. Icons use inline SVG; typography uses Google Fonts with local fallbacks.
 
 ### No secrets
 No API keys or credentials exist in the repository, the video or any export. Keys are typed by the user into the page at run time.
