@@ -212,5 +212,21 @@ const assumptions = () => GT_SAMPLE.assumptions;
     assert.ok(rows.every((r) => Array.isArray(r.fragile_without)));
   });
 
+  await test('quote fragments must be ordered and all must match whole words', () => {
+    const turns = [{role:'interviewee',text:'We pay our suppliers every Friday and review invoices on Monday.'}];
+    assert.equal(GT.findQuote('review invoices ... pay our suppliers',turns,'interviewee'),-1);
+    assert.equal(GT.findQuote('pay our suppliers ... unicorn',turns,'interviewee'),-1);
+    assert.equal(GT.findQuote('ay our suppliers',turns,'interviewee'),-1);
+    assert.equal(GT.findQuote('pay our suppliers ... Friday',turns,'interviewee'),0);
+  });
+  await test('checkpoint rejects unknown actions and invalid parked verdicts', () => {
+    const a=[{id:'A1'}];
+    assert.equal(GT.checkGate(a,{A1:{action:'other',final_verdict:'supported',rationale:'A sufficiently long reason'}}).ok,false);
+    assert.equal(GT.checkGate(a,{A1:{action:'park',final_verdict:'supported',rationale:'A sufficiently long reason'}}).ok,false);
+  });
+  await test('evidence references cannot use inherited properties', () => {
+    const r=GT.scoreAssessment({assumption_id:'A1',supporting_ids:['constructor','toString'],contradicting_ids:[]},{},8);
+    assert.equal(r.invalid_refs,2); assert.equal(r.verdict,'untested');
+  });
   console.log('\n' + passed + ' tests passed' + (process.exitCode ? ' (with failures)' : ''));
 })();
