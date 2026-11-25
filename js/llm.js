@@ -11,6 +11,7 @@
 
   // Free-tier guard: refuse the one case we can detect locally (OpenRouter paid models).
   function freeGuard(cfg) {
+    if (cfg.preset === 'ollama' && cfg.baseUrl && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/v1\/?$/.test(cfg.baseUrl)) return { ok: false, msg: 'Ollama must use a local loopback endpoint.' };
     if (cfg.preset === 'openrouter' && !/:free$/.test(cfg.model || '')) return { ok: false, msg: 'OpenRouter models must end in ":free" to comply with the Equal Access AI Policy.' };
     return { ok: true, msg: '' };
   }
@@ -22,7 +23,7 @@
     const guard = freeGuard(cfg);
     if (!guard.ok) throw new Error(guard.msg);
     const preset = PRESETS[cfg.preset] || PRESETS.custom;
-    const base = (cfg.baseUrl || preset.baseUrl).replace(/\/+$/, '');
+    const base = ((cfg.preset === 'custom' || cfg.preset === 'ollama') ? (cfg.baseUrl || preset.baseUrl) : preset.baseUrl).replace(/\/+$/, '');
     let last = 0, jsonModeOk = true, effortOk = true;
 
     async function chat({ system, user, json }) {
@@ -56,7 +57,7 @@
           if (res.status === 401 || res.status === 403) throw Object.assign(new Error('The provider rejected the request (HTTP ' + res.status + '): ' + (apiMsg(detail) || 'no detail') + ' Check that the key belongs to this provider and is active.'), { fatal: true, auth: true });
           if ((res.status === 429 || res.status >= 500) && attempt < 5) {
             const ra = parseFloat(res.headers.get('retry-after'));
-            const wait = Number.isFinite(ra) ? ra * 1000 : delay;
+            const wait = Number.isFinite(ra) ? Math.max(0, Math.min(ra * 1000, 30000)) : Math.min(delay, 30000);
             if (hooks && hooks.onRetry) hooks.onRetry('HTTP ' + res.status + ': waiting ' + Math.round(wait / 1000) + 's (free-tier rate limit), retry ' + attempt + '/4');
             await sleep(wait); delay *= 2; continue;
           }
@@ -78,7 +79,7 @@
   const PREFER = [/gpt-oss-120b/, /llama-3\.3-70b/, /llama-3\.1-70b/, /gemini-2\.5-flash$/, /gemini-2\.5-flash-lite/, /gpt-oss-20b/, /llama-3\.1-8b/, /llama/i, /gemini/i];
   async function listModels(cfg) {
     const preset = PRESETS[cfg.preset] || PRESETS.custom;
-    const base = (cfg.baseUrl || preset.baseUrl).replace(/\/+$/, '');
+    const base = ((cfg.preset === 'custom' || cfg.preset === 'ollama') ? (cfg.baseUrl || preset.baseUrl) : preset.baseUrl).replace(/\/+$/, '');
     const headers = cfg.key ? { Authorization: 'Bearer ' + cfg.key } : {};
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 15000);
     try {
