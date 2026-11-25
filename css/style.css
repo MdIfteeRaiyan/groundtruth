@@ -429,3 +429,22 @@ body::before { content: ''; position: fixed; inset: 0; z-index: -1; background: 
   .item.iv > .btn { order: 2; margin: 2px 0 0 auto; }
   .setupbar { position: static; box-shadow: none; backdrop-filter: none; background: var(--panel); }
 }
+
+/* Focused review and approachable interview scoring */
+.focused-review{align-items:start;min-width:0}
+.focused-review>div,.focused-review>.side,.focused-review .acard{min-width:0;overflow-wrap:anywhere}
+.review-step{margin:0 0 12px;font-weight:600}
+.focused-review .abody{display:grid;gap:12px}
+.focused-review .quote{line-height:1.6}
+.focused-review .opts{gap:10px}
+.quality-result{margin-top:14px;display:grid;gap:8px;min-width:0}
+.quality-total{display:flex;flex-wrap:wrap;align-items:baseline;gap:12px}
+.quality-total strong{font-size:2rem;line-height:1.2;color:var(--acc, currentColor)}
+.quality-total small{font-size:.85rem;font-weight:500}
+.quality-total span{font-weight:600}
+.quality-library{margin-top:18px}
+.quality-entry{padding:12px 0;border-bottom:1px solid var(--line, #94a3b8)}
+.quality-entry h3{margin:0;font-size:1rem}
+.footer-credit{display:flex;flex-direction:column;gap:5px;min-width:0;overflow-wrap:anywhere}
+.footer-credit a{color:inherit;text-decoration:underline;text-underline-offset:3px}
+@media(max-width:700px){.focused-review .two{grid-template-columns:minmax(0,1fr)}.focused-review .opts{display:grid;grid-template-columns:minmax(0,1fr)}.footer-credit{width:100%}.focused-review .ovbar{flex-wrap:wrap}.quality-total strong{font-size:1.75rem}}
